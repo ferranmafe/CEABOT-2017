@@ -162,7 +162,13 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
   this->qr_pose_mutex_enter();
   if (msg->tags.size()>0) {
      for (int i = 0; i < msg->tags.size(); ++i) {
-         set<humanoid_common_msgs::tag_pose>::iterator it;
+         std::set<qr_info>::iterator it;
+
+         qr_info aux;
+         aux.qr_id = tags[i].qr_id;
+         aux.pos.x = tags[i].position.x; aux.pos.y = tags[i].position.y; aux.pos.z = tags[i].position.z;
+         aux.pos.x = tags[i].position.x; aux.pos.y = tags[i].position.y; aux.pos.z = tags[i].position.z;
+
          it = this->qr_tags_detected.find(msg->tags[i]);
 
          if (it == this->qr_tags_detected.end()) this->qr_tags_detected.insert(msg->tags[i]);

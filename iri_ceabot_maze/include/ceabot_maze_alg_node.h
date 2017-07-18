@@ -57,6 +57,19 @@
                MOVEMENT,
                CHECK_GOAL} darwin_states;
 
+struct position {
+  double x; double y; double z;
+};
+
+struct orientation {
+  double x; double y; double z; double w;
+}
+
+struct qr_info {
+  string qr_id; position pos; orientation ori;
+};
+
+
 class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgorithm>
 {
   private:
@@ -114,8 +127,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     double tilt_angle;
     double current_tilt_angle;
 
-    std::set<humanoid_common_msgs::tag_pose> qr_tags_detected;
-    
+    std::set<qr_info> qr_tags_detected;
+
     Config config_;
     CWalkModule walk;
     CHeadTrackingModule tracking_module;
