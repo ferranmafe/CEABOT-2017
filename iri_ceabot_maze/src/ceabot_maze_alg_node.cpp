@@ -14,6 +14,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   this->search_started=false;
   this->first_scan_goal_achieved = false;
   this->second_scan_goal_achieved = false;
+  this->third_scan_goal_achieved = false;
   // [init publishers]
 
   // [init subscribers]
@@ -133,9 +134,11 @@ void CeabotMazeAlgNode::joint_states_callback(const sensor_msgs::JointState::Con
   for (i = 0; i < msg->name.size() ; ++i){
     if (msg->name[i]=="j_pan"){
       this->current_pan_angle=msg->position[i];
-      if (this->darwin_state == SCAN_MAZE and this->search_started and this->current_pan_angle > PI/2) first_scan_goal_achieved = true;
-      else if (this->darwin_state == SCAN_MAZE and this->search_started and this->first_scan_goal_achieved and this->current_pan_angle < -PI/2) second_scan_goal_achieved = true;
-
+      if (this->darwin_state == SCAN_MAZE and this->search_started) {
+          if (this->current_pan_angle >= ((85 * PI) / 180)) this->first_scan_goal_achieved = true;
+          else if (this->first_scan_goal_achieved and this->current_pan_angle <= ((-85 * PI) / 180)) this->second_scan_goal_achieved = true;
+          else if (this->second_scan_goal_achieved and this->current_pan_angle >= 0.0) this->third_scan_goal_achieved = true;
+      }
     }
     else if (msg->name[i]=="j_tilt"){
       this->current_tilt_angle=(msg->position[i]);
@@ -156,16 +159,14 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 }
 
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
-  //ROS_INFO("QrHeadTrackingAlgNode::qr_pose_callback: New Message Received");
-  //ROS_INFO("Detected %d QR tags",(int)msg->tags.size());
   this->qr_pose_mutex_enter();
-  if(msg->tags.size()>0)
-  {
-    //std::cout << this->QR_identifier << std::endl;
-    //this->pan_angle=this->current_pan_angle+atan2(msg->tags[0].position.x,msg->tags[0].position.z);
-    //this->tilt_angle=this->current_tilt_angle+atan2(msg->tags[0].position.y,msg->tags[0].position.z);
-    //ROS_INFO("Next target pan angle: %f (%f,%f)",this->pan_angle,this->current_pan_angle,atan2(msg->tags[0].position.x,msg->tags[0].position.z));
-    //ROS_INFO("Next target tilt angle: %f (%f,%f)",this->tilt_angle,this->current_tilt_angle,atan2(msg->tags[0].position.y,msg->tags[0].position.z));
+  if (msg->tags.size()>0) {
+     for (int i = 0; i < msg->tags.size(); ++i) {
+         set<humanoid_common_msgs::tag_pose>::iterator it;
+         it = this->qr_tags_detected.find(msg->tags[i]);
+
+         if (it == this->qr_tags_detected.end()) this->qr_tags_detected.insert(msg->tags[i]);
+     }
   }
   this->qr_pose_mutex_exit();
 }
@@ -221,35 +222,44 @@ void CeabotMazeAlgNode::init_headt_module(void) {
   this->tracking_module.set_tilt_pid(config_.tilt_p, config_.tilt_i, config_.tilt_d, config_.tilt_i_clamp);
 }
 
-void CeabotMazeAlgNode::calculate_next_move(void) {
-
+void CeabotMazeAlgNode::scan_maze(void) {
+    if (!this->search_started) {
+      this->tracking_module.start_tracking(PI/2, 0.0);
+      this->search_started = true;
+    }
+    else {
+      if (this->first_scan_goal_achieved) {
+        this->tracking_module.update_target(-PI/2, 0.0);
+      }
+      else if (this->second_scan_goal_achieved) {
+        this->tracking_module.update_target(0.0, 0.0);
+      }
+      else if (this->third_scan_goal_achieved) {
+        this->tracking_module.stop_tracking();
+        this->darwin_state = CALCULATE_NEXT_MOVE;
+        this->search_started = false;
+        this->first_scan_goal_achieved = false;
+        this->second_scan_goal_achieved = false;
+        this->third_scan_goal_achieved = false;
+      }
+    }
 }
+
+void CeabotMazeAlgNode::calculate_next_move(void) {}
+
+void CeabotMazeAlgNode::darwin_movement(void) {}
+
+void CeabotMazeAlgNode::check_goal(void) {}
 
 void CeabotMazeAlgNode::state_machine(void) {
   switch(this->darwin_state) {
-    case IDLE: //0 ------------------------------------------------------------------------------------------------------------------------------------
+    case IDLE:
       ROS_INFO("Darwin Ceabot Vision : state IDLE");
       break;
 
-    case SCAN_MAZE: //1 -------------------------------------------------------------------------------------------------------------------------------
+    case SCAN_MAZE:
       ROS_INFO("Scanning Maze...");
-      if (!this->search_started) {
-        this->tracking_module.start_tracking(PI/2, 0.0);
-        this->search_started = true;
-      }
-      else if (!this->first_scan_goal_achieved) {
-        this->tracking_module.update_target(-PI/2, 0.0);
-      }
-      else if (!this->second_scan_goal_achieved) {
-        this->tracking_module.update_target(0.0, 0.0);
-      }
-      else {
-          darwin_state = CALCULATE_NEXT_MOVE;
-          search_started = false;
-          first_scan_goal_achieved = false;
-          second_scan_goal_achieved = false;
-      }
-
+      scan_maze();
       break;
 
     case CALCULATE_NEXT_MOVE:
@@ -257,12 +267,14 @@ void CeabotMazeAlgNode::state_machine(void) {
       calculate_next_move();
       break;
 
-    case MOVEMENT: //2 ----------------------------------------------------------------------------------------------------------------------------------
+    case MOVEMENT:
       ROS_INFO("Moving...");
+      darwin_movement();
       break;
 
-    case CHECK_GOAL: //3 ------------------------------------------------------------------------------------------------------------------
-      ROS_INFO("Checking Movement Accuracy...");
+    case CHECK_GOAL:
+      ROS_INFO("Checking goal...");
+      check_goal();
       break;
   }
 }

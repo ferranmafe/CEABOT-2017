@@ -103,15 +103,19 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     bool event_start;
     darwin_states darwin_state;
     bool half_maze_achieved;
+
     bool search_started;
     bool first_scan_goal_achieved;
     bool second_scan_goal_achieved;
+    bool third_scan_goal_achieved;
+
     double pan_angle;
     double current_pan_angle;
     double tilt_angle;
     double current_tilt_angle;
 
     std::set<humanoid_common_msgs::tag_pose> qr_tags_detected;
+    
     Config config_;
     CWalkModule walk;
     CHeadTrackingModule tracking_module;
@@ -191,7 +195,14 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       */
       void init_headt_module(void);
 
+      void scan_maze(void);
+
       void calculate_next_move(void);
+
+      void darwin_movement(void);
+
+      void check_goal(void);
+
     // [diagnostic functions]
 
     // [test functions]
