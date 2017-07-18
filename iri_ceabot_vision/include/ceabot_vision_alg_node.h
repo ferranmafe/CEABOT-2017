@@ -31,7 +31,7 @@
 #include <humanoid_modules/walk_module.h>
 #include <humanoid_modules/head_tracking_module.h>
 #define PI 3.1415926535
-#define ERROR 0.130899693
+#define GRADIENT 0.159154943
 
 // [publisher subscriber headers]
 #include <sensor_msgs/Imu.h>
@@ -111,7 +111,7 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
     darwin_states darwin_state;
 
     //Parameters of the next move of Darwin (direction and angle)
-    bool turn_left; //If false, turn right
+    int turn_left; //If false, turn right
 
     //Goal to achieve
     double goal;

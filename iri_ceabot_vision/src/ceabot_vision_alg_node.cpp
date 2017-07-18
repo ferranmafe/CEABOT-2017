@@ -18,7 +18,7 @@ CeabotVisionAlgNode::CeabotVisionAlgNode(void) :
   this->current_tilt_angle=config_.TILT_ANGLE;
   this->turn_angle = 0.0;
   this->QR_identifier = "None";
-  this->turn_left = false;
+  this->turn_left = 1;
   //this->loop_rate_ = 2;//in [Hz]
 
   // [init publishers]
@@ -288,12 +288,13 @@ void CeabotVisionAlgNode::state_machine(void) {
         std::cout << this->QR_identifier << std::endl;
         setPanFromQR_id();
         //ROS_INFO("Darwin Ceabot Vision : turn_angle %f, turn_left %f", this->turn_angle, this->turn_left);
-        this->turn_angle = (this->turn_angle * PI) / 180.0;
-        if (!this->turn_left) this->turn_angle *= -1;
-        //Command Darwin to turn the desired angle
+        this->turn_angle = this->turn_left*(this->turn_angle * PI) / 180.0;
+
         this->goal = get_goal(this->turn_angle, this->bno055_measurement);
-        std::cout << "goal: " << this->goal << "mesura: " << this->bno055_measurement << ' ' << "angle de gir decoded: " << this->turn_angle << std::endl;
-        this->turn_angle = saturate(get_magnitude(this->goal, this->bno055_measurement)); //We must saturate it
+        this->turn_angle = this->turn_left*get_magnitude(this->goal, this->bno055_measurement);
+        std::cout << "goal: " << this->goal << " mesura: " << this->bno055_measurement << " angle de gir decoded: " << this->turn_angle << std::endl;
+
+        this->turn_angle = saturate(this->turn_angle); //We must saturate it
         this->walk.set_steps_size(0.0, 0.0, (this->config_.p*(this->turn_angle))); //We multiply the turn angle by a coeficient to deal with the end movement of Darwin (p)
         this->darwin_state = CHECK_GOAL;
       }
@@ -313,13 +314,24 @@ void CeabotVisionAlgNode::state_machine(void) {
     case CHECK_GOAL: //3 ------------------------------------------------------------------------------------------------------------------
       //ROS_INFO("Darwin Ceabot Vision : state CHECK_GOAL");
       double diff = fabs(this->goal - this->bno055_measurement);
-      if (diff >= (-config_.ERROR_PERMES) and diff <= config_.ERROR_PERMES) {
+      if (diff >= -(config_.ERROR_PERMES) and diff <= config_.ERROR_PERMES) {
         ROS_INFO("Darwin Ceabot Vision : Goal achieved, moving on for the next one!");
         this->walk.stop(); //Stop Darwin
         while (!this->walk.is_finished());
         this->movement_started = false;
+        this->config_.p = 0.4;
         this->darwin_state = IDLE;
         this->QR_identifier = "None";
+      }
+      else {
+        double p_aux = GRADIENT*diff;
+        if (diff > PI) p_aux = GRADIENT*(fabs(diff - PI));
+        if (p_aux > 0.112) {
+          std::cout << "diferencia : " << diff << " p: " << p_aux << std::endl;
+          this->walk.set_steps_size(0.0, 0.0, p_aux*(this->turn_angle));
+          this->config_.p = p_aux;
+        }
+        else this->walk.set_steps_size(0.0, 0.0, 0.112*(this->turn_angle));
       }
       /*else if (diff >= ((-config_.ERROR_PERMES)*10) and ((diff <= config_.ERROR_PERMES)*10)) {
         this->config_.p -= 0.025;
@@ -342,8 +354,8 @@ void CeabotVisionAlgNode::setPanFromQR_id() {
     else if (!es_letra and !(auxiliar [k] >= '0' and auxiliar [k] <= '9')) { //If it's a number and we find a letter...
        end = k - 1;
        es_letra = true;
-       if (auxiliar [k] == 'R') this->turn_left = false;
-       else if (auxiliar [k] == 'L') this->turn_left = true;
+       if (auxiliar [k] == 'R') this->turn_left = -1;
+       else if (auxiliar [k] == 'L') this->turn_left = 1;
     }
   }
   auxiliar = auxiliar.substr(beg, end - beg + 1);
@@ -358,8 +370,8 @@ double CeabotVisionAlgNode::get_magnitude (double alpha, double beta) {
     mgn -= 2*PI;
   else if (mgn < (-PI)) //Same case
     mgn += 2*PI;
-
-  return mgn; //We do not return the abs, just because the direction matters
+  std::cout << mgn << std::endl;
+  return fabs(mgn); //We do not return the abs, just because the direction matters
 
 }
 
