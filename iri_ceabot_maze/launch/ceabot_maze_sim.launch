@@ -68,6 +68,8 @@
                 to="/darwin/robot/set_tilt_pid"/>
        <remap from="/darwin/iri_ceabot_maze/ceabot_maze_track/get_tilt_pid"
                 to="/darwin/robot/get_tilt_pid"/>
+       <remap from="/darwin/iri_ceabot_maze/joint_states"
+                to="/darwin/joint_states"/>
 
        <!-- bno055 remaps -->
        <remap from="/darwin/iri_ceabot_maze/imu"

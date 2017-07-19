@@ -31,7 +31,7 @@
 #include <humanoid_modules/walk_module.h>
 #include <humanoid_modules/head_tracking_module.h>
 #define PI 3.1415926535
-#define ERROR 0.130899693
+#define ERROR 0.087266462
 
 // [publisher subscriber headers]
 #include <sensor_msgs/Imu.h>
@@ -39,7 +39,7 @@
 #include <sensor_msgs/JointState.h>
 #include <humanoid_common_msgs/tag_pose_array.h>
 #include <string>
-#include <set>
+#include <map>
 #include <tf/tf.h>
 
 // [service client headers]
@@ -63,10 +63,10 @@ struct position {
 
 struct orientation {
   double x; double y; double z; double w;
-}
+};
 
 struct qr_info {
-  string qr_id; position pos; orientation ori;
+  position pos; orientation ori;
 };
 
 
@@ -127,7 +127,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     double tilt_angle;
     double current_tilt_angle;
 
-    std::set<qr_info> qr_tags_detected;
+    std::map<std::string, qr_info> qr_tags_detected;
 
     Config config_;
     CWalkModule walk;
@@ -215,6 +215,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       void darwin_movement(void);
 
       void check_goal(void);
+
+      double DegtoRad(double degree);
 
     // [diagnostic functions]
 
