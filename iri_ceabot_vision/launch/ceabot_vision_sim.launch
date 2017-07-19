@@ -93,6 +93,16 @@
                  to="/darwin/iri_ceabot_vision/qr_pose"/>
   </node>
 
+  <!-- launch the darwin_buttons to simulate the polling -->
+  <node pkg="darwin_buttons"
+        name="darwin_buttons"
+        type="darwin_buttons"
+        output="screen"
+        ns="/darwin">
+        <remap from="/darwin/darwin_buttons/parameter_updates"
+                 to="/darwin/iri_ceabot_vision/buttons"/>
+  </node>
+
   <!-- launch the Darwins Camera node -->
   <node pkg="image_view"
         name="image_view"

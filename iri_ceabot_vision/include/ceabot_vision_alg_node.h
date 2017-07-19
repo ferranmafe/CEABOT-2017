@@ -34,6 +34,7 @@
 #define GRADIENT 0.159154943
 
 // [publisher subscriber headers]
+#include <dynamic_reconfigure/Config.h>
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/JointState.h>
@@ -52,7 +53,8 @@
  typedef enum {IDLE,
                SEARCH_QR,
                MOVEMENT,
-               CHECK_GOAL} darwin_states;
+               CHECK_GOAL,
+               WAIT_STOP_WALKING} darwin_states;
 
 class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVisionAlgorithm>
 {
@@ -60,6 +62,12 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
     // [publisher attributes]
 
     // [subscriber attributes]
+    ros::Subscriber buttons_subscriber_;
+    void buttons_callback(const dynamic_reconfigure::Config::ConstPtr& msg);
+    pthread_mutex_t buttons_mutex_;
+    void buttons_mutex_enter(void);
+    void buttons_mutex_exit(void);
+
     ros::Subscriber imu_subscriber_;
     void imu_callback(const sensor_msgs::Imu::ConstPtr& msg);
     pthread_mutex_t imu_mutex_;

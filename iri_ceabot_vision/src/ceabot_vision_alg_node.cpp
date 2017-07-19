@@ -7,8 +7,7 @@ CeabotVisionAlgNode::CeabotVisionAlgNode(void) :
 {
   //init class attributes if necessary
   //Initialization of Darwin Vision Event parameters
-  this->event_start = true;
-  this->darwin_state = IDLE;
+  this->event_start = false;
   this->movement_started = false;
 
   this->search_started=false;
@@ -24,6 +23,9 @@ CeabotVisionAlgNode::CeabotVisionAlgNode(void) :
   // [init publishers]
 
   // [init subscribers]
+  this->buttons_subscriber_ = this->public_node_handle_.subscribe("buttons", 1, &CeabotVisionAlgNode::buttons_callback, this);
+  pthread_mutex_init(&this->buttons_mutex_,NULL);
+
   this->imu_subscriber_ = this->public_node_handle_.subscribe("imu", 1, &CeabotVisionAlgNode::imu_callback, this);
   pthread_mutex_init(&this->imu_mutex_,NULL);
 
@@ -47,6 +49,7 @@ CeabotVisionAlgNode::CeabotVisionAlgNode(void) :
 
 CeabotVisionAlgNode::~CeabotVisionAlgNode(void) {
   // [free dynamic memory]
+  pthread_mutex_destroy(&this->buttons_mutex_);
   pthread_mutex_destroy(&this->imu_mutex_);
   pthread_mutex_destroy(&this->odom_mutex_);
   pthread_mutex_destroy(&this->joint_states_mutex_);
@@ -65,14 +68,27 @@ void CeabotVisionAlgNode::mainNodeThread(void) {
 
   //State Machine. After the start the idea is to iterate between the different states
   //SEARCH_QR -> DECODE_QR -> MOVEMENT -> MOVEMENT_ERROR_COMPROBATION -> SEARCH_QR
-  if (!this->event_start) {
+  if (this->event_start) {
     state_machine();
   }
+}
 
-  //Code for the start. It sets all the configuration from the .cfg to the modules.
-  //Then, waits for 5 sec (start condition - read CEABOT rules) and change the Darwin
-  //state to start searching for the first QR code
-  else {
+/*  [subscriber callbacks] */
+void CeabotVisionAlgNode::buttons_callback(const dynamic_reconfigure::Config::ConstPtr& msg)
+{
+  ROS_INFO("CeabotVisionAlgNode::buttons_callback: New Message Received");
+
+  //use appropiate mutex to shared variables if necessary
+  //this->alg_.lock();
+  //this->buttons_mutex_enter();
+  bool value = false;
+  for (int k = 0; k < msg->bools.size(); ++k) {
+    if (msg->bools[k].name == "start_button" and msg->bools[k].value) value = true;
+  }
+  if (value and !this->event_start) {
+    //Code for the start. It sets all the configuration from the .cfg to the modules.
+    //Then, waits for 5 sec (start condition - read CEABOT rules) and change the Darwin
+    //state to start searching for the first QR code
     //Initialization of Darwin parameters
     init_walk_module();
     init_headt_module();
@@ -86,11 +102,25 @@ void CeabotVisionAlgNode::mainNodeThread(void) {
     //this->darwin_state = darwin_states(config_.darwin_st);
 
     //We must set down the start flag in terms of dont enter to this condition again
-    this->event_start = false;
+    this->event_start = true;
+    this->darwin_state = IDLE;
   }
+  //std::cout << msg->data << std::endl;
+  //unlock previously blocked shared variables
+  //this->alg_.unlock();
+  //this->buttons_mutex_exit();
 }
 
-/*  [subscriber callbacks] */
+void CeabotVisionAlgNode::buttons_mutex_enter(void)
+{
+  pthread_mutex_lock(&this->buttons_mutex_);
+}
+
+void CeabotVisionAlgNode::buttons_mutex_exit(void)
+{
+  pthread_mutex_unlock(&this->buttons_mutex_);
+}
+
 void CeabotVisionAlgNode::imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 {
   //ROS_INFO("CeabotVisionAlgNode::imu_callback: New Message Received");
@@ -184,7 +214,7 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
   if(msg->tags.size()>0)
   {
     //std::cout << this->QR_identifier << std::endl;
-    if (this->darwin_state == IDLE and !this->event_start and this->QR_identifier == "None") {
+    if (this->darwin_state == IDLE and this->event_start and this->QR_identifier == "None") {
       this->darwin_state = MOVEMENT;
       this->QR_identifier = msg->tags[0].tag_id; //Se puede añadir en un and que la posicion sea distinta a todos los leidos anteriormente
     }
@@ -263,6 +293,7 @@ void CeabotVisionAlgNode::state_machine(void) {
       ROS_INFO("Darwin Ceabot Vision : state IDLE");
       //if (this->movement_started) {ros::duration.sleep(0.1); this->movement_started = false;} //We wait to get the correct QR...
       //this->darwin_state = MOVEMENT;
+
       break;
     case SEARCH_QR: //1 -------------------------------------------------------------------------------------------------------------------------------
       //ROS_INFO("Darwin Ceabot Vision : state SEARCH_QR");
@@ -274,13 +305,14 @@ void CeabotVisionAlgNode::state_machine(void) {
         this->search_started=true;
       }
       else this->tracking_module.update_target(this->pan_angle,this->tilt_angle);
+
       break;
 
     case MOVEMENT: //2 ----------------------------------------------------------------------------------------------------------------------------------
       //Only enter to this if-condition in the first iteration of the mainNodeThread in
       //MOVEMENT case
       if (!this->movement_started) {
-        //ROS_INFO("Darwin Ceabot Vision : state MOVEMENT -> Starting Movement");
+        ROS_INFO("Darwin Ceabot Vision : state MOVEMENT -> Starting Movement");
         //We have to control manually if the movement is started
         this->movement_started = true;
         //Walk works in rad. We must convert the angle from degrees (QR Code returns
@@ -292,7 +324,6 @@ void CeabotVisionAlgNode::state_machine(void) {
 
         this->goal = get_goal(this->turn_angle, this->bno055_measurement);
         this->turn_angle = this->turn_left*get_magnitude(this->goal, this->bno055_measurement);
-        std::cout << "goal: " << this->goal << " mesura: " << this->bno055_measurement << " angle de gir decoded: " << this->turn_angle << std::endl;
 
         this->turn_angle = saturate(this->turn_angle); //We must saturate it
         this->walk.set_steps_size(0.0, 0.0, (this->config_.p*(this->turn_angle))); //We multiply the turn angle by a coeficient to deal with the end movement of Darwin (p)
@@ -307,37 +338,36 @@ void CeabotVisionAlgNode::state_machine(void) {
         }
         else ROS_INFO("Darwin Ceabot Vision : state MOVEMENT -> Moving");
       }*/
+
       break;
 
     //Case after movement. Before the next scan we must verify if we've made the
     //movement correctly
-    case CHECK_GOAL: //3 ------------------------------------------------------------------------------------------------------------------
-      //ROS_INFO("Darwin Ceabot Vision : state CHECK_GOAL");
-      double diff = fabs(this->goal - this->bno055_measurement);
-      if (diff >= -(config_.ERROR_PERMES) and diff <= config_.ERROR_PERMES) {
+    case CHECK_GOAL: {//3 ------------------------------------------------------------------------------------------------------------------
+      ROS_INFO("Darwin Ceabot Vision : state CHECK_GOAL");
+      double diff = fabs(this->goal - (this->bno055_measurement));
+
+      if (diff >= -(this->config_.ERROR_PERMES) and diff <= this->config_.ERROR_PERMES) {
         ROS_INFO("Darwin Ceabot Vision : Goal achieved, moving on for the next one!");
         this->walk.stop(); //Stop Darwin
-        while (!this->walk.is_finished());
+        this->darwin_state = WAIT_STOP_WALKING;
+      }
+      else {
+        double tom = saturate(this->config_.p * diff * this->turn_left);
+        this->walk.set_steps_size(0.0, 0.0, tom);
+      }
+
+      break;
+    }
+
+    case WAIT_STOP_WALKING:
+      ROS_INFO("Darwin Ceabot Vision : state WAIT_STOP_WALKING");
+      if (this->walk.is_finished() and this->walk.get_status() == walk_module_status_t(WALK_MODULE_SUCCESS)) { //If we finished waliing successfully!
         this->movement_started = false;
-        this->config_.p = 0.4;
         this->darwin_state = IDLE;
         this->QR_identifier = "None";
       }
-      else {
-        double p_aux = GRADIENT*diff;
-        if (diff > PI) p_aux = GRADIENT*(fabs(diff - PI));
-        if (p_aux > 0.112) {
-          std::cout << "diferencia : " << diff << " p: " << p_aux << std::endl;
-          this->walk.set_steps_size(0.0, 0.0, p_aux*(this->turn_angle));
-          this->config_.p = p_aux;
-        }
-        else this->walk.set_steps_size(0.0, 0.0, 0.112*(this->turn_angle));
-      }
-      /*else if (diff >= ((-config_.ERROR_PERMES)*10) and ((diff <= config_.ERROR_PERMES)*10)) {
-        this->config_.p -= 0.025;
-        this->walk.set_yaw_step_size(this->config_.p*(this->turn_angle));
-      }*/
-      //this->turn_angle = saturate(get_magnitude(this->bno055_measurement, this->turn_angle));*/
+      //Check if the robot is fallen?
       break;
   }
 }
