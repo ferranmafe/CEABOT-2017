@@ -53,6 +53,7 @@
 
  typedef enum {IDLE,
                SCAN_MAZE,
+               WAIT_FOR_SCAN,
                CALCULATE_NEXT_MOVE,
                MOVEMENT,
                CHECK_GOAL} darwin_states;
@@ -121,11 +122,17 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     bool first_scan_goal_achieved;
     bool second_scan_goal_achieved;
     bool third_scan_goal_achieved;
+    bool goal_achieved;
 
     double pan_angle;
+    double goal_x;
+    double goal_y;
     double current_pan_angle;
     double tilt_angle;
     double current_tilt_angle;
+    double current_angle_travelled;
+    int    direction;
+
 
     std::map<std::string, qr_info> qr_tags_detected;
 
@@ -210,6 +217,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void scan_maze(void);
 
+      void wait_for_scan(void);
+
       void calculate_next_move(void);
 
       void darwin_movement(void);
@@ -217,6 +226,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       void check_goal(void);
 
       double DegtoRad(double degree);
+
+      void print_map(std::map<std::string, qr_info>& map);
 
     // [diagnostic functions]
 

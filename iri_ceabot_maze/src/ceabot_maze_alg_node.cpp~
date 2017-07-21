@@ -134,6 +134,24 @@ void CeabotMazeAlgNode::joint_states_callback(const sensor_msgs::JointState::Con
   for (i = 0; i < msg->name.size() ; ++i){
     if (msg->name[i]=="j_pan"){
       this->current_pan_angle=msg->position[i];
+      double aux_pan = this->current_pan_angle;
+      if (this->darwin_state == SCAN_MAZE and this->search_started) {
+          if (aux_pan >= DegtoRad(85.0)) {
+            ros::Duration(1.0).sleep();
+            this->first_scan_goal_achieved = true;
+            goal_x = -PI/2;
+          }
+          if (this->first_scan_goal_achieved and aux_pan <= DegtoRad(-85.0)) {
+            ros::Duration(1.0).sleep();
+            this->second_scan_goal_achieved = true;
+            this->first_scan_goal_achieved = false;
+            goal_x = 0.0;
+          }
+          if (this->second_scan_goal_achieved and aux_pan >= (0.0 - ERROR) and aux_pan <= (0.0 + ERROR)) {
+             this->third_scan_goal_achieved = true;
+             this->second_scan_goal_achieved = false;
+          }
+      }
     }
     else if (msg->name[i]=="j_tilt"){
       this->current_tilt_angle=(msg->position[i]);
@@ -162,7 +180,7 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
 
          qr_tags_detected[msg->tags[i].tag_id] = aux;
 
-         //std::cout << msg->tags[i].tag_id << std::endl;
+         std::cout << msg->tags[i].tag_id << std::endl;
 
      }
   }
@@ -222,58 +240,30 @@ void CeabotMazeAlgNode::init_headt_module(void) {
 
 void CeabotMazeAlgNode::scan_maze(void) {
     if (!this->search_started) {
-      this->direction = 1;
-      this->goal_x = PI/2.0;
-      this->goal_y = PI/4.5;
-      this->current_angle_travelled = 0.0;
+      goal_x = PI/2.0;
+      goal_y = PI/4.5;
       this->tracking_module.start_tracking(goal_x, goal_y);
       this->search_started = true;
     }
     else {
-      this->tracking_module.update_target(goal_x, goal_y);
-    }
-    this->darwin_state = WAIT_FOR_SCAN;
-}
+      if (this->first_scan_goal_achieved) {
+        this->tracking_module.update_target(goal_x, goal_y);
+      }
+      else if (this->second_scan_goal_achieved) {
+        this->tracking_module.update_target(goal_x, goal_y);
+      }
+      else if (this->third_scan_goal_achieved) {
+        this->tracking_module.stop_tracking();
+        this->darwin_state = CALCULATE_NEXT_MOVE;
+        this->search_started = false;
+        this->third_scan_goal_achieved = false;
 
-void CeabotMazeAlgNode::wait_for_scan(void) {
-  double aux_pan = this->current_pan_angle;
-  if (this->search_started) {
-    if (aux_pan >= (this->goal_x - ERROR) and aux_pan <= (this->goal_x + ERROR)) { //Sub-goal achieved
-      ROS_INFO("Ceabot Maze : Goal achieved, moving on for the next one!");
-      if (fabs(this->goal_x) == PI/2.0) this->direction *= -1;
-      if (this->direction == 1) {
-        this->goal_x += PI/2.0;
-        this->current_angle_travelled += PI/2.0;
+        std::map<std::string, qr_info>::iterator it;
+        for (it = qr_tags_detected.begin(); it != qr_tags_detected.end(); it++) {
+            std::cout << it->first << std::endl;
+        }//*/
       }
-      else {
-        this->goal_x -= PI/4.0;
-        this->current_angle_travelled += PI/4.0;
-      }
-      if (this->direction == -1) {
-        ros::Duration(0.5).sleep();
-      }
-      this->darwin_state = SCAN_MAZE;
     }
-    if (this->current_angle_travelled == DegtoRad(360.0)) {
-      this->search_started = false;
-      this->darwin_state = CALCULATE_NEXT_MOVE;
-
-      print_map(this->qr_tags_detected);
-    }
-      /*if (aux_pan >= DegtoRad(85.0)) {
-        //this->first_scan_goal_achieved = true;
-        goal_x = -PI/2;
-      }
-      if (aux_pan <= DegtoRad(-85.0)) {
-        //this->second_scan_goal_achieved = true;
-        //this->first_scan_goal_achieved = false;
-        goal_x = 0.0;
-      }
-      if (this->second_scan_goal_achieved and aux_pan >= (0.0 - ERROR) and aux_pan <= (0.0 + ERROR)) {
-         //this->third_scan_goal_achieved = true;
-         //this->second_scan_goal_achieved = false;
-      }*/
-  }
 }
 
 void CeabotMazeAlgNode::calculate_next_move(void) {}
@@ -290,13 +280,7 @@ void CeabotMazeAlgNode::state_machine(void) {
 
     case SCAN_MAZE:
       //ROS_INFO("Scanning Maze...");
-      //scan_maze();
-      print_map(this->qr_tags_detected);
-      break;
-
-    case WAIT_FOR_SCAN:
-      ROS_INFO("Waiting for scan...");
-      wait_for_scan();
+      scan_maze();
       break;
 
     case CALCULATE_NEXT_MOVE:
@@ -318,21 +302,6 @@ void CeabotMazeAlgNode::state_machine(void) {
 
 double CeabotMazeAlgNode::DegtoRad (double degree) {
   return (degree * PI)/180.0;
-}
-
-void CeabotMazeAlgNode::print_map(std::map<std::string, qr_info>& map) {
-  std::map<std::string, qr_info>::iterator it;
-
-  for (it = map.begin(); it != map.end(); ++it) {
-    std::cout << "QR TAG: " << it->first << std:: endl;
-    std::cout << "Position parameters:" << std::endl;
-    std::cout << "x: " << it->second.pos.x << " y: " << it->second.pos.y << " z: " << it->second.pos.z << std:: endl;
-    //std::cout << "Orientation parameters:" << std::endl;
-    //std::cout << "x: " << it->second.ori.x << " y: " << it->second.ori.y << " z: " << it->second.ori.z << " w: " << it->second.ori.w << std:: endl;
-    std::cout << std::endl;
-    std::cout << "---------------------" << std::endl;
-    std::cout << std::endl;
-  }
 }
 
 /* main function */
