@@ -64,7 +64,8 @@
                MOVEMENT_ALPHA,
                MOVEMENT_X,
                CHECK_GOAL_ALPHA,
-               CHECK_GOAL_XY
+               CHECK_GOAL_XY,
+               IS_DARWIN_STANDING
                } darwin_states;
 
 struct position {
