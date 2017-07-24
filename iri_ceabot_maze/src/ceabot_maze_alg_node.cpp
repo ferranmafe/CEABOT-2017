@@ -16,6 +16,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   this->third_scan_goal_achieved = false;
 
   this->direction = 0;
+  this->turn_left = 1;
   // [init publishers]
 
   // [init subscribers]
@@ -108,7 +109,8 @@ void CeabotMazeAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg) {
   //use appropiate mutex to shared variables if necessary
   //this->alg_.lock();
   //this->odom_mutex_enter();
-
+  this->odom_x = msg->pose.pose.position.x;
+  this->odom_y = msg->pose.pose.position.y;
   //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
   //this->alg_.unlock();
@@ -268,30 +270,55 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
 void CeabotMazeAlgNode::calculate_next_move(void) {}
 
 void CeabotMazeAlgNode::darwin_movement_alpha(double alpha) { //angle to perform
+    if (alpha < 0) {this->turn_left = -1; alpha = fabs(alpha);}
+    else this->turn_left = 1;
+    //alpha = fabs(alpha); //...
     this->mov_alpha_goal = get_goal_alpha(alpha, this->bno055_measurement);
-    double alpha_sat = saturate_rotation(get_magnitude_alpha(this->mov_alpha_goal, this->bno055_measurement));
+    double alpha_sat = saturate_alpha(get_magnitude_alpha(this->mov_alpha_goal, this->bno055_measurement));
 
-    this->walk.set_steps_size(0.0, 0.0, this->config_.p * alpha_sat);
+    this->walk.set_steps_size(0.0, 0.0, this->config_.p * alpha_sat * this->turn_left);
     this->darwin_state = CHECK_GOAL_ALPHA;
 
 }
 
-void CeabotMazeAlgNode::darwin_movement_x(double x) {}
+void CeabotMazeAlgNode::darwin_movement_x(double x) {
+  std::pair<double, double> parr = get_goal_xy(x, this->odom_x, this->odom_y, this->nm_alpha);
+  this->mov_x_goal = parr.first;
+  this->mov_y_goal = parr.second;
+
+  double x_sat = saturate_movement(x);
+  this->walk.set_steps_size(x_sat, 0.0, 0.0);
+  this->darwin_state = CHECK_GOAL_XY;
+}
 
 void CeabotMazeAlgNode::check_goal_alpha(double goal) {
   double diff = fabs(goal - this->bno055_measurement);
   if (diff >= -this->config_.ERROR_PERMES and diff <= this->config_.ERROR_PERMES) {
     ROS_INFO("Alpha goal achieved, soon I'll be moving on!");
     this->walk.stop();
-    this->darwin_state = MOVEMENT_X;
+    this->darwin_state = MOVEMENT_X; //We first perform the rotation, the the transition is made between MOVEMENT_ALPHA and MOVEMENT_X
   }
   else {
     double tom = saturate_alpha(this->config_.p * diff * this->turn_left);
+    std::cout << "tom: " << tom << " goal: " << goal << " diff: " << diff << std::endl;
     this->walk.set_steps_size(0.0, 0.0, tom);
   }
 }
 
-void CeabotMazeAlgNode::check_goal_x(double goal) {}
+void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
+  double diffx = fabs(goalx - this->odom_x);
+  double diffy = fabs(goaly - this->odom_y);
+  if ((diffx >= -this->config_.ERROR_PERMES and diffx <= this->config_.ERROR_PERMES) and (diffy >= -this->config_.ERROR_PERMES and diffy <= this->config_.ERROR_PERMES)) {
+    ROS_INFO("X goal achieved, soon I'll be moving on!");
+    this->walk.stop();
+    this->darwin_state = IDLE;
+    //cambio de estado HERE PLZ
+  }
+  else {
+    double tom = saturate_movement(this->config_.p * diff);
+    this->walk.set_steps_size(tom, 0.0, 0.0);
+  }
+}
 
 void CeabotMazeAlgNode::state_machine(void) {
   switch(this->darwin_state) {
@@ -327,6 +354,10 @@ void CeabotMazeAlgNode::state_machine(void) {
 
     case CALCULATE_MOVEMENT:
       ROS_INFO("Calculating next move...");
+      calculate_next_move();
+      this->nm_alpha = 3.141519;
+      this->nm_x = 100.0;
+      this->darwin_state = MOVEMENT_ALPHA;
       break;
 
     case MOVEMENT_ALPHA:
@@ -346,8 +377,8 @@ void CeabotMazeAlgNode::state_machine(void) {
       break;
 
     case CHECK_GOAL_X:
-      ROS_INFO("Checking x goal...")
-      check_goal_x(this->mov_x_goal);
+      ROS_INFO("Checking x goal...");
+      check_goal_x(this->mov_x_goal, this->mov_y_goal);
       break;
   }
 }
@@ -383,7 +414,20 @@ double CeabotMazeAlgNode::get_goal_alpha (double alpha, double beta) { // "Calcu
 
 }
 
-double CeabotMazeAlgNode::saturate_rotation (double alpha) {
+double CeabotMazeAlgNode::get_magnitude_x (double fin, double ini) {
+  return fin - ini;
+}
+
+std::pair <double, double> CeabotMazeAlgNode::get_goal_xy (double x, double inix, double iniy, double alpha) {
+  std::pair <double, double> ret;
+
+  ret.first = (cos(alpha) * x) + inix;
+  ret.second = (sin(alpha) * x) + iniy;
+
+  return ret;
+}
+
+double CeabotMazeAlgNode::saturate_alpha (double alpha) {
   /*
     MAX_UPPER_LIMIT
     MIN_UPPER_LIMIT
@@ -398,6 +442,14 @@ double CeabotMazeAlgNode::saturate_rotation (double alpha) {
   //std::cout << "La saturacion nos da:: " << alpha << ' ' << std::endl;
 
   return alpha;
+}
+
+double CeabotMazeAlgNode::saturate_movement (double x) {
+  double sat = x;
+  if (x > 0.05) sat = 0.05;
+  else if (x < -0.05) sat = -0.05;
+
+  return sat; //Obviously incomplete
 }
 
 void CeabotMazeAlgNode::search_for_goal_qr (void) {
@@ -476,6 +528,7 @@ int CeabotMazeAlgNode::actual_zone_to_scan(void) {
         return 4;
     }
 }
+
 /* main function */
 int main(int argc,char *argv[]) {
   return algorithm_base::main<CeabotMazeAlgNode>(argc, argv, "ceabot_maze_alg_node");

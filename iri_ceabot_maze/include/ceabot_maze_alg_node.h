@@ -44,6 +44,7 @@
 #include <vector>
 #include <tf/tf.h>
 
+
 // [service client headers]
 
 // [action server client headers]
@@ -63,7 +64,7 @@
                MOVEMENT_ALPHA,
                MOVEMENT_X,
                CHECK_GOAL_ALPHA,
-               CHECK_GOAL_X
+               CHECK_GOAL_XY
                } darwin_states;
 
 struct position {
@@ -141,8 +142,11 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     double nm_x;
     double nm_alpha;
     double bno055_measurement;
+    double odom_x;
+    double odom_y;
     double mov_alpha_goal;
     double mov_x_goal;
+    double mov_y_goal;
     int    turn_left;
     int    direction;
 
@@ -243,15 +247,19 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void check_goal_alpha(double goal);
 
-      void check_goal_x(double goal);
+      void check_goal_xy(double goalx, double goaly);
 
       double DegtoRad(double degree);
 
       double get_magnitude_alpha (double alpha, double beta);
 
+      double get_magnitude_x (double x, double ini);
+
       double get_goal_alpha (double alpha, double beta);
 
-      double saturate_rotation (double alpha);
+      std::pair <double,double> get_goal_xy (double x, double inix, double iniy, double alpha);
+
+      double saturate_alpha (double alpha);
 
       double saturate_movement (double x);
 
