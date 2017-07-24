@@ -34,13 +34,14 @@
 #define ERROR 0.087266462
 
 // [publisher subscriber headers]
+#include <std_msgs/Int8.h>
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/JointState.h>
 #include <humanoid_common_msgs/tag_pose_array.h>
 #include <string>
 #include <map>
-#include <pair>
+#include <utility>
 #include <vector>
 #include <tf/tf.h>
 
@@ -86,6 +87,12 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     // [publisher attributes]
 
     // [subscriber attributes]
+    ros::Subscriber fallen_state_subscriber_;
+    void fallen_state_callback(const std_msgs::Int8::ConstPtr& msg);
+    pthread_mutex_t fallen_state_mutex_;
+    void fallen_state_mutex_enter(void);
+    void fallen_state_mutex_exit(void);
+
     ros::Subscriber imu_subscriber_;
     void imu_callback(const sensor_msgs::Imu::ConstPtr& msg);
     pthread_mutex_t imu_mutex_;
@@ -148,6 +155,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     double mov_x_goal;
     double mov_y_goal;
     int    turn_left;
+    int    fallen_state;
     int    direction;
 
     double next_x_mov;
