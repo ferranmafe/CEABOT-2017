@@ -30,6 +30,8 @@
 
 #include <humanoid_modules/walk_module.h>
 #include <humanoid_modules/head_tracking_module.h>
+#include <humanoid_modules/action_module.h>
+
 #define PI 3.1415926535
 #define ERROR 0.087266462
 
@@ -168,6 +170,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     Config config_;
     CWalkModule walk;
     CHeadTrackingModule tracking_module;
+    CActionModule action;
+
   public:
    /**
     * \brief Constructor

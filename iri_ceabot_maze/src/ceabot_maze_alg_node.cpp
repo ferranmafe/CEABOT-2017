@@ -3,7 +3,8 @@
 CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   algorithm_base::IriBaseAlgorithm<CeabotMazeAlgorithm>(),
   walk("ceabot_maze_walk"),
-  tracking_module("ceabot_maze_track"){
+  tracking_module("ceabot_maze_track"),
+  action("action_client"){
   //init class attributes if necessary
   //this->loop_rate_ = 2;//in [Hz]
   this->event_start = true;
@@ -14,6 +15,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
 
   this->direction = 0;
   this->turn_left = 1;
+  this->fallen_state = -1;
   // [init publishers]
 
   // [init subscribers]
@@ -181,19 +183,19 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
   if (msg->tags.size()>0) {
-    /*if (this->searching_for_qr) {
+    if (this->searching_for_qr) {
       int zone_to_scan = actual_zone_to_scan();
       for (int i = 0; i < msg->tags.size(); ++i) {
         qr_info aux;
-        aux.qr_tag = msg->tags[i].tag_id << " " <<
+        aux.qr_tag = msg->tags[i].tag_id;
         aux.pos.x = msg->tags[i].position.x;    aux.pos.y = msg->tags[i].position.y;    aux.pos.z = msg->tags[i].position.z;
         aux.ori.x = msg->tags[i].orientation.x; aux.ori.y = msg->tags[i].orientation.y; aux.ori.z = msg->tags[i].orientation.z; aux.ori.w = msg->tags[i].orientation.w;
 
-        qr_information[zone_to_scan][i] = aux;
+        //qr_information[zone_to_scan][i] = aux;
       }
-    }*/
-    std::cout << msg->tags[0].tag_id << std::endl;
-    std::cout << msg->tags[0].position.x << " " << msg->tags[0].position.y << " " << msg->tags[0].position.z << std::endl;
+    }
+    /*std::cout << msg->tags[0].tag_id << std::endl;
+    std::cout << msg->tags[0].position.x << " " << msg->tags[0].position.y << " " << msg->tags[0].position.z << std::endl;*/
   }
   this->qr_pose_mutex_exit();
 }
@@ -354,7 +356,7 @@ void CeabotMazeAlgNode::state_machine(void) {
 
     case SCAN_MAZE:
       //ROS_INFO("Scanning Maze...");
-      //scan_maze();
+      scan_maze();
       break;
 
     case WAIT_FOR_SCAN:
@@ -380,8 +382,8 @@ void CeabotMazeAlgNode::state_machine(void) {
     case CALCULATE_MOVEMENT:
       ROS_INFO("Calculating next move...");
       calculate_next_move();
-      this->nm_alpha = 3.141519;
-      this->nm_x = 100.0;
+      this->nm_alpha = -0.7;
+      this->nm_x = 60.0;
       this->darwin_state = MOVEMENT_ALPHA;
       break;
 
@@ -407,17 +409,15 @@ void CeabotMazeAlgNode::state_machine(void) {
       break;
     case IS_DARWIN_STANDING:
       ROS_INFO("Checking Darwin integrity...");
-      if (this->walk.is_finished()) {
-        if (this->fallen_state == 1) {
-
+      if (this->walk.is_finished() and this->action.is_finished()) {
+        if (this->fallen_state == 0) {
+          this->action.execute(10);
         }
-        else if (this->fallen_state == 2) {
-
+        else if (this->fallen_state == 1) {
+          this->action.execute(11);
         }
       }
 
-
-      else )
       break;
   }
 }
@@ -537,7 +537,7 @@ void CeabotMazeAlgNode::calculate_density(void) {
 }
 
 void CeabotMazeAlgNode::find_holes(void) {
-
+  this->darwin_state = CALCULATE_MOVEMENT;
 }
 
 std::pair<std::string, int> CeabotMazeAlgNode::divide_qr_tag (std::string qr_tag) {
