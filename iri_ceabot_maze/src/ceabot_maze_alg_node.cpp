@@ -338,8 +338,7 @@ void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
   if ((diffx >= -this->config_.ERROR_PERMES and diffx <= this->config_.ERROR_PERMES) and (diffy >= -this->config_.ERROR_PERMES and diffy <= this->config_.ERROR_PERMES)) {
     ROS_INFO("X goal achieved, soon I'll be moving on!");
     this->walk.stop();
-    this->darwin_state = IDLE;
-    //cambio de estado HERE PLZ
+    this->darwin_state = IS_DARWIN_STANDING;
   }
   else {
     double tom = saturate_movement(this->config_.p * ((diffx+diffy)/2.0));
@@ -405,6 +404,13 @@ void CeabotMazeAlgNode::state_machine(void) {
     case CHECK_GOAL_XY:
       ROS_INFO("Checking x goal...");
       check_goal_xy(this->mov_x_goal, this->mov_y_goal);
+      break;
+    case IS_DARWIN_STANDING:
+      ROS_INFO("Checking Darwin integrity...");
+      if (this->walk.is_finished() and this->walk.get_status() == WALK_MODULE_SUCCESS) {
+
+      }
+      else if (this->walk.is_finished() and this->walk.get_status() == WALK_MODULE_)
       break;
   }
 }
