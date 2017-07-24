@@ -407,10 +407,17 @@ void CeabotMazeAlgNode::state_machine(void) {
       break;
     case IS_DARWIN_STANDING:
       ROS_INFO("Checking Darwin integrity...");
-      if (this->walk.is_finished() and this->walk.get_status() == WALK_MODULE_SUCCESS) {
+      if (this->walk.is_finished()) {
+        if (this->fallen_state == 1) {
 
+        }
+        else if (this->fallen_state == 2) {
+
+        }
       }
-      else if (this->walk.is_finished() and this->walk.get_status() == WALK_MODULE_)
+
+
+      else )
       break;
   }
 }
