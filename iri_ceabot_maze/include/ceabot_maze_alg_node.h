@@ -40,6 +40,7 @@
 #include <humanoid_common_msgs/tag_pose_array.h>
 #include <string>
 #include <map>
+#include <vector>
 #include <tf/tf.h>
 
 // [service client headers]
@@ -55,8 +56,11 @@
                SCAN_MAZE,
                WAIT_FOR_SCAN,
                CALCULATE_NEXT_MOVE,
-               MOVEMENT,
-               CHECK_GOAL} darwin_states;
+               MOVEMENT_ALPHA,
+               MOVEMENT_X,
+               CHECK_GOAL_ALPHA,
+               CHECK_GOAL_X
+               } darwin_states;
 
 struct position {
   double x; double y; double z;
@@ -67,7 +71,7 @@ struct orientation {
 };
 
 struct qr_info {
-  position pos; orientation ori;
+  std::string qr_tag; position pos; orientation ori;
 };
 
 
@@ -131,10 +135,20 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     double tilt_angle;
     double current_tilt_angle;
     double current_angle_travelled;
+    double nm_x;
+    double nm_alpha;
+    double bno055_measurement;
+    double mov_alpha_goal;
+    double mov_x_goal;
+    int    turn_left;
     int    direction;
 
 
     std::map<std::string, qr_info> qr_tags_detected;
+
+    std::vector<int> ocupation;
+
+    std::vector<std::vector<qr_info> > qr_information;
 
     Config config_;
     CWalkModule walk;
@@ -221,13 +235,25 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void calculate_next_move(void);
 
-      void darwin_movement(void);
+      void darwin_movement_alpha(double alpha);
 
-      void check_goal(void);
+      void darwin_movement_x(double x);
+
+      void check_goal_alpha(double goal);
+
+      void check_goal_x(double goal);
 
       double DegtoRad(double degree);
 
       void print_map(std::map<std::string, qr_info>& map);
+
+      double get_magnitude_alpha (double alpha, double beta);
+
+      double get_goal_alpha (double alpha, double beta);
+
+      double saturate_rotation (double alpha);
+
+      double saturate_movement (double x);
 
     // [diagnostic functions]
 
