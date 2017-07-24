@@ -40,6 +40,7 @@
 #include <humanoid_common_msgs/tag_pose_array.h>
 #include <string>
 #include <map>
+#include <pair>
 #include <vector>
 #include <tf/tf.h>
 
@@ -56,7 +57,10 @@
  typedef enum {IDLE,
                SCAN_MAZE,
                WAIT_FOR_SCAN,
-               CALCULATE_NEXT_MOVE,
+               SEARCH_FOR_GOAL_QR,
+               CALCULATE_DENSITY,
+               FIND_HOLES,
+               CALCULATE_MOVEMENT,
                MOVEMENT_ALPHA,
                MOVEMENT_X,
                CHECK_GOAL_ALPHA,
@@ -124,10 +128,9 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     bool half_maze_achieved;
 
     bool search_started;
-    bool first_scan_goal_achieved;
-    bool second_scan_goal_achieved;
-    bool third_scan_goal_achieved;
     bool goal_achieved;
+    bool searching_for_qr;
+    bool wall_qr_goal_found;
 
     double pan_angle;
     double goal_x;
@@ -147,11 +150,10 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     int    turn_left;
     int    direction;
 
+    double next_x_mov;
+    double next_y_mov;
 
-    std::map<std::string, qr_info> qr_tags_detected;
-
-    std::vector<int> ocupation;
-
+    std::vector<double> ocupation;
     std::vector<std::vector<qr_info> > qr_information;
 
     Config config_;
@@ -249,8 +251,6 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       double DegtoRad(double degree);
 
-      void print_map(std::map<std::string, qr_info>& map);
-
       double get_magnitude_alpha (double alpha, double beta);
 
       double get_magnitude_x (double x, double ini);
@@ -263,6 +263,15 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       double saturate_movement (double x);
 
+      void search_for_goal_qr (void);
+
+      int actual_zone_to_scan(void);
+
+      void calculate_density(void);
+
+      void find_holes(void);
+
+      std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
     // [diagnostic functions]
 
     // [test functions]

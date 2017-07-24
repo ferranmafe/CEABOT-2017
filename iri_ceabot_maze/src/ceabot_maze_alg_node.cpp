@@ -3,8 +3,7 @@
 CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   algorithm_base::IriBaseAlgorithm<CeabotMazeAlgorithm>(),
   walk("ceabot_maze_walk"),
-  tracking_module("ceabot_maze_track")
-{
+  tracking_module("ceabot_maze_track"){
   //init class attributes if necessary
   //this->loop_rate_ = 2;//in [Hz]
   this->event_start = true;
@@ -41,8 +40,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   // [init action clients]
 }
 
-CeabotMazeAlgNode::~CeabotMazeAlgNode(void)
-{
+CeabotMazeAlgNode::~CeabotMazeAlgNode(void){
   // [free dynamic memory]
   pthread_mutex_destroy(&this->imu_mutex_);
   pthread_mutex_destroy(&this->odom_mutex_);
@@ -50,8 +48,7 @@ CeabotMazeAlgNode::~CeabotMazeAlgNode(void)
   pthread_mutex_destroy(&this->qr_pose_mutex_);
 }
 
-void CeabotMazeAlgNode::mainNodeThread(void)
-{
+void CeabotMazeAlgNode::mainNodeThread(void){
   // [fill msg structures]
 
   // [fill srv structure and make request to the server]
@@ -159,14 +156,17 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
   if (msg->tags.size()>0) {
-     for (int i = 0; i < msg->tags.size(); ++i) {
-         qr_info aux;
-         aux.pos.x = msg->tags[i].position.x;    aux.pos.y = msg->tags[i].position.y;    aux.pos.z = msg->tags[i].position.z;
-         aux.ori.x = msg->tags[i].orientation.x; aux.ori.y = msg->tags[i].orientation.y; aux.ori.z = msg->tags[i].orientation.z; aux.ori.w = msg->tags[i].orientation.w;
+    if (this->searching_for_qr) {
+      int zone_to_scan = actual_zone_to_scan();
+      for (int i = 0; i < msg->tags.size(); ++i) {
+        qr_info aux;
+        aux.qr_tag = msg->tags[i].tag_id
+        aux.pos.x = msg->tags[i].position.x;    aux.pos.y = msg->tags[i].position.y;    aux.pos.z = msg->tags[i].position.z;
+        aux.ori.x = msg->tags[i].orientation.x; aux.ori.y = msg->tags[i].orientation.y; aux.ori.z = msg->tags[i].orientation.z; aux.ori.w = msg->tags[i].orientation.w;
 
-         qr_tags_detected[msg->tags[i].tag_id] = aux;
-       }
-
+        qr_information[zone_to_scan][i] = aux;
+      }
+    }
   }
   this->qr_pose_mutex_exit();
 }
@@ -228,10 +228,12 @@ void CeabotMazeAlgNode::scan_maze(void) {
       this->goal_x = PI/2.0;
       this->goal_y = PI/4.5;
       this->current_angle_travelled = 0.0;
+      this->searching_for_qr = false;
       this->tracking_module.start_tracking(goal_x, goal_y);
       this->search_started = true;
     }
     else {
+      this->searching_for_qr = false;
       this->tracking_module.update_target(goal_x, goal_y);
     }
     this->darwin_state = WAIT_FOR_SCAN;
@@ -252,36 +254,20 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
         this->current_angle_travelled += PI/4.0;
       }
       if (this->direction == -1) {
+        this->searching_for_qr = true;
         ros::Duration(0.5).sleep();
       }
       this->darwin_state = SCAN_MAZE;
     }
     if (this->current_angle_travelled == DegtoRad(360.0)) {
       this->search_started = false;
-      this->darwin_state = CALCULATE_NEXT_MOVE;
+      this->darwin_state = SEARCH_FOR_GOAL_QR;
       this->direction = 0;
-
-      print_map(this->qr_tags_detected);
     }
-      /*if (aux_pan >= DegtoRad(85.0)) {
-        //this->first_scan_goal_achieved = true;
-        goal_x = -PI/2;
-      }
-      if (aux_pan <= DegtoRad(-85.0)) {
-        //this->second_scan_goal_achieved = true;
-        //this->first_scan_goal_achieved = false;
-        goal_x = 0.0;
-      }
-      if (this->second_scan_goal_achieved and aux_pan >= (0.0 - ERROR) and aux_pan <= (0.0 + ERROR)) {
-         //this->third_scan_goal_achieved = true;
-         //this->second_scan_goal_achieved = false;
-      }*/
   }
 }
 
-void CeabotMazeAlgNode::calculate_next_move(void) {
-
-}
+void CeabotMazeAlgNode::calculate_next_move(void) {}
 
 void CeabotMazeAlgNode::darwin_movement_alpha(double alpha) { //angle to perform
     if (alpha < 0) {this->turn_left = -1; alpha = fabs(alpha);}
@@ -351,7 +337,22 @@ void CeabotMazeAlgNode::state_machine(void) {
       wait_for_scan();
       break;
 
-    case CALCULATE_NEXT_MOVE:
+    case SEARCH_FOR_GOAL_QR:
+      ROS_INFO("Trying to find the goal QR...");
+      search_for_goal_qr ();
+      break;
+
+    case CALCULATE_DENSITY:
+      ROS_INFO("Calculating density of each zone...");
+      calculate_density();
+      break;
+
+    case FIND_HOLES:
+      ROS_INFO("Finding holes for each zone...");
+      find_holes();
+      break;
+
+    case CALCULATE_MOVEMENT:
       ROS_INFO("Calculating next move...");
       calculate_next_move();
       this->nm_alpha = 3.141519;
@@ -364,14 +365,17 @@ void CeabotMazeAlgNode::state_machine(void) {
       //nm_alpha stands for next movement alpha, etc
       darwin_movement_alpha(this->nm_alpha);
       break;
+
     case MOVEMENT_X:
       ROS_INFO("Moving...");
       darwin_movement_x(this->nm_x);
       break;
+
     case CHECK_GOAL_ALPHA:
       ROS_INFO("Checking alpha goal...");
       check_goal_alpha(this->mov_alpha_goal);
       break;
+
     case CHECK_GOAL_X:
       ROS_INFO("Checking x goal...");
       check_goal_x(this->mov_x_goal, this->mov_y_goal);
@@ -381,21 +385,6 @@ void CeabotMazeAlgNode::state_machine(void) {
 
 double CeabotMazeAlgNode::DegtoRad (double degree) {
   return (degree * PI)/180.0;
-}
-
-void CeabotMazeAlgNode::print_map(std::map<std::string, qr_info>& map) {
-  std::map<std::string, qr_info>::iterator it;
-
-  for (it = map.begin(); it != map.end(); ++it) {
-    std::cout << "QR TAG: " << it->first << std:: endl;
-    std::cout << "Position parameters:" << std::endl;
-    std::cout << "x: " << it->second.pos.x << " y: " << it->second.pos.y << " z: " << it->second.pos.z << std:: endl;
-    //std::cout << "Orientation parameters:" << std::endl;
-    //std::cout << "x: " << it->second.ori.x << " y: " << it->second.ori.y << " z: " << it->second.ori.z << " w: " << it->second.ori.w << std:: endl;
-    std::cout << std::endl;
-    std::cout << "---------------------" << std::endl;
-    std::cout << std::endl;
-  }
 }
 
 double CeabotMazeAlgNode::get_magnitude_alpha (double alpha, double beta) {
@@ -461,6 +450,83 @@ double CeabotMazeAlgNode::saturate_movement (double x) {
   else if (x < -0.05) sat = -0.05;
 
   return sat; //Obviously incomplete
+}
+
+void CeabotMazeAlgNode::search_for_goal_qr (void) {
+    this->wall_qr_goal_found = false;
+    if (!this->half_maze_achieved) {
+        for (int i = 0; i < this->qr_information.size(); ++i) {
+            for (int j = 0; j < this->qr_information[i].size(); ++j) {
+                std::pair<std::string, int> aux = divide_qr_tag (this->qr_information[i][j].qr_tag);
+
+                if (aux.second > 6 and aux.first = "N") {
+                    this->wall_qr_goal_found = true;
+                    this->darwin_state = CALCULATE_MOVEMENT;
+                }
+            }
+        }
+    }
+    else {
+        for (int i = 0; i < this->qr_information.size(); ++i) {
+            for (int j = 0; j < this->qr_information[i].size(); ++j) {
+                std::pair<std::string, int> aux = divide_qr_tag (this->qr_information[i][j].qr_tag);
+
+                if (aux.second > 6 and aux.first = "S") {
+                    this->wall_qr_goal_found = true;
+                    this->darwin_state = CALCULATE_MOVEMENT;
+                }
+            }
+        }
+    }
+    this->darwin_state = CALCULATE_DENSITY;
+}
+
+void CeabotMazeAlgNode::calculate_density(void) {
+    for (int i = 0; i < this->qr_information.size(); ++i) {
+        double obstacles_on_the_zone = 0.0;
+        std::vector<bool> obstacles (6, false);
+        for (int j = 0; j < this->qr_information[i].size(); ++j) {
+            std::pair<std::string, int> actual_qr = divide_qr_tag (this->qr_information[i][j].qr_tag);
+            if (actual_qr.second <= 6 and !obstacles[actual_qr.second - 1]) {
+                obstacles_on_the_zone += 1.0;
+                obstacles[actual_qr.second - 1] = true;
+            }
+        }
+        this->ocupation[i] = obstacles_on_the_zone / 6.0;
+    }
+    this->darwin_states = FIND_HOLES;
+}
+
+void CeabotMazeAlgNode::find_holes(void) {
+
+}
+
+std::pair<std::string, int> CeabotMazeAlgNode::divide_qr_tag (std::string qr_tag) {
+    std::pair<std::string, int> aux;
+
+    aux.first = qr_tag[0];
+    qr_tag.erase(0, 1);
+    aux.second = atoi(qr_tag.c_str());
+
+    return aux;
+}
+
+int CeabotMazeAlgNode::actual_zone_to_scan(void) {
+    if (this->current_pan_angle >= DegtoRad(-112.5) and this->current_pan_angle <= DegtoRad(-67.5)) {
+        return 0;
+    }
+    else if (this->current_pan_angle > DegtoRad(-67.5) and this->current_pan_angle <= DegtoRad(-22.5)) {
+        return 1;
+    }
+    else if (this->current_pan_angle > DegtoRad(-22.5) and this->current_pan_angle <= DegtoRad(22.5)) {
+        return 2;
+    }
+    else if (this->current_pan_angle > DegtoRad(22.5) and this->current_pan_angle <= DegtoRad(67.5)) {
+        return 3;
+    }
+    else if (this->current_pan_angle > DegtoRad(67.5) and this->current_pan_angle <= DegtoRad(112.5)) {
+        return 4;
+    }
 }
 
 /* main function */
