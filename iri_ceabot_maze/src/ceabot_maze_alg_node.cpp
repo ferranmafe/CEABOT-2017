@@ -80,8 +80,7 @@ void CeabotMazeAlgNode::mainNodeThread(void){
 }
 
 /*  [subscriber callbacks] */
-void CeabotMazeAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& msg)
-{
+void CeabotMazeAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& msg) {
   //ROS_INFO("CeabotMazeAlgNode::fallen_state_callback: New Message Received");
 
   //use appropiate mutex to shared variables if necessary
@@ -94,13 +93,11 @@ void CeabotMazeAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& ms
   //this->fallen_state_mutex_exit();
 }
 
-void CeabotMazeAlgNode::fallen_state_mutex_enter(void)
-{
+void CeabotMazeAlgNode::fallen_state_mutex_enter(void) {
   pthread_mutex_lock(&this->fallen_state_mutex_);
 }
 
-void CeabotMazeAlgNode::fallen_state_mutex_exit(void)
-{
+void CeabotMazeAlgNode::fallen_state_mutex_exit(void) {
   pthread_mutex_unlock(&this->fallen_state_mutex_);
 }
 
@@ -181,7 +178,7 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
   if (msg->tags.size()>0) {
-    /*if (this->searching_for_qr) {
+    if (this->searching_for_qr) {
       int zone_to_scan = actual_zone_to_scan();
       for (int i = 0; i < msg->tags.size(); ++i) {
         qr_info aux;
@@ -191,9 +188,7 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
 
         qr_information[zone_to_scan][i] = aux;
       }
-    }*/
-    std::cout << msg->tags[0].tag_id << std::endl;
-    std::cout << msg->tags[0].position.x << " " << msg->tags[0].position.y << " " << msg->tags[0].position.z << std::endl;
+    }
   }
   this->qr_pose_mutex_exit();
 }
@@ -294,7 +289,12 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
   }
 }
 
-void CeabotMazeAlgNode::calculate_next_move(void) {}
+void CeabotMazeAlgNode::calculate_next_move(void) {
+    this->nm_x = sqrt(pow(next_x_mov) + pow(next_z_mov));
+    this->nm_alpha = PI - atan2(next_z_mov, next_x_mov);
+
+    this->darwin_state = MOVEMENT_ALPHA;
+}
 
 void CeabotMazeAlgNode::darwin_movement_alpha(double alpha) { //angle to perform
     if (alpha < 0) {this->turn_left = -1; alpha = fabs(alpha);}
@@ -353,8 +353,8 @@ void CeabotMazeAlgNode::state_machine(void) {
       break;
 
     case SCAN_MAZE:
-      //ROS_INFO("Scanning Maze...");
-      //scan_maze();
+      ROS_INFO("Scanning Maze...");
+      scan_maze();
       break;
 
     case WAIT_FOR_SCAN:
@@ -405,6 +405,7 @@ void CeabotMazeAlgNode::state_machine(void) {
       ROS_INFO("Checking x goal...");
       check_goal_xy(this->mov_x_goal, this->mov_y_goal);
       break;
+
     case IS_DARWIN_STANDING:
       ROS_INFO("Checking Darwin integrity...");
       if (this->walk.is_finished()) {
@@ -501,6 +502,9 @@ void CeabotMazeAlgNode::search_for_goal_qr (void) {
                 if (aux.second > 6 and aux.first == "N") {
                     this->wall_qr_goal_found = true;
                     this->darwin_state = CALCULATE_MOVEMENT;
+
+                    this->next_x_mov = this->qr_information[i][j].pos.x;
+                    this->next_z_mov = this->qr_information[i][j].pos.z;
                 }
             }
         }
@@ -513,6 +517,9 @@ void CeabotMazeAlgNode::search_for_goal_qr (void) {
                 if (aux.second > 6 and aux.first == "S") {
                     this->wall_qr_goal_found = true;
                     this->darwin_state = CALCULATE_MOVEMENT;
+
+                    this->next_x_mov = this->qr_information[i][j].pos.x;
+                    this->next_z_mov = this->qr_information[i][j].pos.z;
                 }
             }
         }
@@ -531,13 +538,54 @@ void CeabotMazeAlgNode::calculate_density(void) {
                 obstacles[actual_qr.second - 1] = true;
             }
         }
-        this->ocupation[i] = obstacles_on_the_zone / 6.0;
+        this->ocupation[i].first = i;
+        this->ocupation[i].second = obstacles_on_the_zone / 6.0;
     }
     this->darwin_state = FIND_HOLES;
 }
 
 void CeabotMazeAlgNode::find_holes(void) {
+    std::sort(ocupation.begin(), ocupation.end(), density_sort);
+}
 
+bool CeabotMazeAlgNode::is_wall(qr_info obs1) {
+    std::pair<std::string, int> aux = divide_qr_tag(obs1.tag_id);
+    if (aux.second > 6) return true;
+    else return false;
+}
+
+
+bool CeabotMazeAlgNode::is_hole(qr_info obs1, qr_info obs2) {
+    double distance = sqrt(pow(obs1.pos.x - obs2.pos.x) + pow(obs1.pos.z - obs2.pos.z));
+    return (distance >= 0.5);
+}
+
+void CeabotMazeAlgNode::calculate_point_to_move(qr_info obs1, qr_info obs2) {
+    if (obs1 != NULL and obs2 != NULL) {
+        this->next_x_mov = (obs1.pos.x + obs2.pos.x) / 2.0;
+        this->next_z_mov = (obs1.pos.z + obs2.pos.z) / 2.0;
+    }
+    else if (obs1 == NULL) {
+        this->next_x_mov = obs2.pos.x - 0.25;
+        this->next_z_mov = obs2.pos.z;
+    }
+    else if {
+        this->next_x_mov = obs1.pos.x + 0.25;
+        this->next_z_mov = obs1.pos.z;
+    }
+}
+
+bool CeabotMazeAlgNode::density_sort (double i, double j) {
+    if (i > 0.0 and j > 0.0) {
+        return i < j;
+    }
+    else if (i == 0.0 and j > 0.0) {
+        return false;
+    }
+    else if (i > 0.0 and j == 0.0) {
+        return true;
+    }
+    else return true;
 }
 
 std::pair<std::string, int> CeabotMazeAlgNode::divide_qr_tag (std::string qr_tag) {
