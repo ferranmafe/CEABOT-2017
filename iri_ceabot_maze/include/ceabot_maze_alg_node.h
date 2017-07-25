@@ -44,6 +44,7 @@
 #include <string>
 #include <map>
 #include <utility>
+#include <iostream>
 #include <algorithm>
 #include <vector>
 #include <math.h>
@@ -166,8 +167,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     double next_x_mov;
     double next_z_mov;
 
-    std::vector<std::pair<int, double> > ocupation;
-    std::vector<std::vector<qr_info> > qr_information;
+    std::vector<std::pair <int, double> > ocupation;
+    std::vector<std::vector <qr_info> > qr_information;
 
     Config config_;
     CWalkModule walk;
@@ -284,13 +285,15 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void calculate_density(void);
 
+      static bool density_sort(std::pair <int,double> k, std::pair <int,double> l);
+
       void find_holes(void);
 
-      bool is_hole(qr_info obs1, qr_info obs2);
+      bool is_hole(qr_info* obs1, qr_info* obs2);
 
-      bool is_wall(qr_info obs1);
+      bool is_wall(qr_info* obs1);
 
-      void calculate_point_to_move(void);
+      void calculate_point_to_move(qr_info* obs1, qr_info* obs2);
 
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
     // [diagnostic functions]

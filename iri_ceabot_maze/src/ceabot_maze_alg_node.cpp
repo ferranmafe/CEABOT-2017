@@ -89,6 +89,7 @@ void CeabotMazeAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& ms
   //this->alg_.lock();
   //this->fallen_state_mutex_enter();
   this->fallen_state = msg->data;
+  if (msg->data != 2) this->darwin_state = IS_DARWIN_STANDING; //No creo que lo mejor sea saltar directamente, habria que guardarse el estado anterior o algo por el estilo... (idk)
   //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
   //this->alg_.unlock();
@@ -292,16 +293,16 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
 }
 
 void CeabotMazeAlgNode::calculate_next_move(void) {
-    this->nm_x = sqrt(pow(next_x_mov) + pow(next_z_mov));
+    this->nm_x = sqrt(pow(next_x_mov, 2) + pow(next_z_mov, 2));
     this->nm_alpha = PI - atan2(next_z_mov, next_x_mov);
 
     this->darwin_state = MOVEMENT_ALPHA;
 }
 
 void CeabotMazeAlgNode::darwin_movement_alpha(double alpha) { //angle to perform
-    if (alpha < 0) {this->turn_left = -1; alpha = fabs(alpha);}
+    if (alpha < 0) this->turn_left = -1;
     else this->turn_left = 1;
-    //alpha = fabs(alpha); //...
+
     this->mov_alpha_goal = get_goal_alpha(alpha, this->bno055_measurement);
     double alpha_sat = saturate_alpha(get_magnitude_alpha(this->mov_alpha_goal, this->bno055_measurement));
 
@@ -337,10 +338,11 @@ void CeabotMazeAlgNode::check_goal_alpha(double goal) {
 void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
   double diffx = fabs(goalx - this->odom_x);
   double diffy = fabs(goaly - this->odom_y);
+  std::cout << "diff en x: " << diffx << " diff en y: " << diffy << ' ' << std::endl;
   if ((diffx >= -this->config_.ERROR_PERMES and diffx <= this->config_.ERROR_PERMES) and (diffy >= -this->config_.ERROR_PERMES and diffy <= this->config_.ERROR_PERMES)) {
-    ROS_INFO("X goal achieved, soon I'll be moving on!");
+    ROS_INFO("XY goal achieved, soon I'll be moving on!");
     this->walk.stop();
-    this->darwin_state = IS_DARWIN_STANDING;
+    this->darwin_state = IS_DARWIN_STANDING; //ANADIR QUE SE HAGA LA TRANSICION DE ESTADOS EN LA INTERRUPCION!
   }
   else {
     double tom = saturate_movement(this->config_.p * ((diffx+diffy)/2.0));
@@ -348,7 +350,7 @@ void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
   }
 }
 
-void CeabotMazeAlgNode::state_machine(void) {
+void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion los cambios de estado que son unicos, o sea, que son transiciones simples...
   switch(this->darwin_state) {
     case IDLE:
       ROS_INFO("Darwin Ceabot Vision : state IDLE");
@@ -383,7 +385,7 @@ void CeabotMazeAlgNode::state_machine(void) {
       ROS_INFO("Calculating next move...");
       calculate_next_move();
       this->nm_alpha = -0.7;
-      this->nm_x = 60.0;
+      this->nm_x = 0.5;
       this->darwin_state = MOVEMENT_ALPHA;
       break;
 
@@ -404,13 +406,14 @@ void CeabotMazeAlgNode::state_machine(void) {
       break;
 
     case CHECK_GOAL_XY:
-      ROS_INFO("Checking x goal...");
+      ROS_INFO("Checking XY goal...");
       check_goal_xy(this->mov_x_goal, this->mov_y_goal);
       break;
 
     case IS_DARWIN_STANDING:
       ROS_INFO("Checking Darwin integrity...");
-      if (this->walk.is_finished() and this->action.is_finished()) {
+      if (!this->walk.is_finished()) this->walk.stop();
+      if (this->action.is_finished()) {
         if (this->fallen_state == 0) {
           this->action.execute(10);
         }
@@ -418,7 +421,7 @@ void CeabotMazeAlgNode::state_machine(void) {
           this->action.execute(11);
         }
       }
-
+      this->darwin_state = SCAN_MAZE;
       break;
   }
 }
@@ -485,9 +488,15 @@ double CeabotMazeAlgNode::saturate_alpha (double alpha) {
 }
 
 double CeabotMazeAlgNode::saturate_movement (double x) {
+  /* HARDCODED LIMITS */
+  double max_upper_limit = 0.015;
+  double min_upper_limit = 0.0075;
   double sat = x;
-  if (x > 0.05) sat = 0.05;
-  else if (x < -0.05) sat = -0.05;
+
+  if (x > max_upper_limit) sat = max_upper_limit;
+  else if (x < -max_upper_limit) sat = -max_upper_limit;
+  else if (x < min_upper_limit and x > -min_upper_limit and x > 0) sat = min_upper_limit;
+  else if (x < min_upper_limit and x > -min_upper_limit and x < 0) sat = -min_upper_limit;
 
   return sat; //Obviously incomplete
 }
@@ -544,38 +553,8 @@ void CeabotMazeAlgNode::calculate_density(void) {
     this->darwin_state = FIND_HOLES;
 }
 
-void CeabotMazeAlgNode::find_holes(void) {
-    std::sort(ocupation.begin(), ocupation.end(), density_sort);
-}
-
-bool CeabotMazeAlgNode::is_wall(qr_info obs1) {
-    std::pair<std::string, int> aux = divide_qr_tag(obs1.tag_id);
-    if (aux.second > 6) return true;
-    else return false;
-}
-
-
-bool CeabotMazeAlgNode::is_hole(qr_info obs1, qr_info obs2) {
-    double distance = sqrt(pow(obs1.pos.x - obs2.pos.x) + pow(obs1.pos.z - obs2.pos.z));
-    return (distance >= 0.5);
-}
-
-void CeabotMazeAlgNode::calculate_point_to_move(qr_info obs1, qr_info obs2) {
-    if (obs1 != NULL and obs2 != NULL) {
-        this->next_x_mov = (obs1.pos.x + obs2.pos.x) / 2.0;
-        this->next_z_mov = (obs1.pos.z + obs2.pos.z) / 2.0;
-    }
-    else if (obs1 == NULL) {
-        this->next_x_mov = obs2.pos.x - 0.25;
-        this->next_z_mov = obs2.pos.z;
-    }
-    else {
-        this->next_x_mov = obs1.pos.x + 0.25;
-        this->next_z_mov = obs1.pos.z;
-    }
-}
-
-bool CeabotMazeAlgNode::density_sort (double i, double j) {
+bool CeabotMazeAlgNode::density_sort (std::pair <int,double> k, std::pair <int,double> l) {
+    double i = k.first; double j = l.first;
     if (i > 0.0 and j > 0.0) {
         return i < j;
     }
@@ -586,6 +565,40 @@ bool CeabotMazeAlgNode::density_sort (double i, double j) {
         return true;
     }
     else return true;
+}
+
+void CeabotMazeAlgNode::find_holes(void) {
+    std::sort (ocupation.begin(), ocupation.end(), density_sort);
+    //hacer cout y mirar si esta ordenado como se quiere
+    //salto directamente al siguiente estado!
+    this->darwin_state = CALCULATE_MOVEMENT;
+}
+
+bool CeabotMazeAlgNode::is_wall(qr_info* obs1) {
+    std::pair<std::string, int> aux = divide_qr_tag(obs1->qr_tag);
+    if (aux.second > 6) return true;
+    else return false;
+}
+
+
+bool CeabotMazeAlgNode::is_hole(qr_info* obs1, qr_info* obs2) {
+    double distance = sqrt(pow(obs1->pos.x - obs2->pos.x, 2) + pow(obs1->pos.z - obs2->pos.z, 2));
+    return (distance >= 0.5);
+}
+
+void CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2) {
+    if (obs1 != NULL and obs2 != NULL) {
+        this->next_x_mov = (obs1->pos.x + obs2->pos.x) / 2.0;
+        this->next_z_mov = (obs1->pos.z + obs2->pos.z) / 2.0;
+    }
+    else if (obs1 == NULL) {
+        this->next_x_mov = obs2->pos.x - 0.25;
+        this->next_z_mov = obs2->pos.z;
+    }
+    else {
+        this->next_x_mov = obs1->pos.x + 0.25;
+        this->next_z_mov = obs1->pos.z;
+    }
 }
 
 std::pair<std::string, int> CeabotMazeAlgNode::divide_qr_tag (std::string qr_tag) {
