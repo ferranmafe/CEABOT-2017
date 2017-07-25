@@ -537,12 +537,13 @@ void CeabotMazeAlgNode::search_for_goal_qr (void) {
 }
 
 void CeabotMazeAlgNode::calculate_density(void) {
+    double obstacles_on_the_zone;
     for (int i = 0; i < this->qr_information.size(); ++i) {
-        double obstacles_on_the_zone = 0.0;
+        obstacles_on_the_zone = 0.0;
         std::vector<bool> obstacles (6, false);
         for (int j = 0; j < this->qr_information[i].size(); ++j) {
             std::pair<std::string, int> actual_qr = divide_qr_tag (this->qr_information[i][j].qr_tag);
-            if (actual_qr.second <= 6 and !obstacles[actual_qr.second - 1]) {
+            if (actual_qr.second <= 6 and !obstacles[actual_qr.second - 1]) { //Obstacle and not already read
                 obstacles_on_the_zone += 1.0;
                 obstacles[actual_qr.second - 1] = true;
             }
@@ -550,6 +551,7 @@ void CeabotMazeAlgNode::calculate_density(void) {
         this->ocupation[i].first = i;
         this->ocupation[i].second = obstacles_on_the_zone / 6.0;
     }
+
     this->darwin_state = FIND_HOLES;
 }
 
@@ -568,8 +570,37 @@ bool CeabotMazeAlgNode::density_sort (std::pair <int,double> k, std::pair <int,d
 }
 
 void CeabotMazeAlgNode::find_holes(void) {
-    std::sort (ocupation.begin(), ocupation.end(), density_sort);
+    std::sort (this->ocupation.begin(), this->ocupation.end(), density_sort);
     //hacer cout y mirar si esta ordenado como se quiere
+    std::pair <int, double> min_density; min_density.second = 1.0;
+    for (int i = 0; i < this->ocupation.size(); ++i) {
+        if (ocupation [i].second() < min_density.second) {min_density = ocupation [i];}
+        for (int k = 0; k < qr_information [i].size(); ++k) {
+          qr_info m_obs, l_obs, r_obs; m_obs = qr_information [k];
+          get_immediate_obs (qr_information [k], m_obs, l_obs, r_obs);
+
+          //Now l_obs and r_obs are fullfilled with the desired obstacles
+          //So we can check if there are some wholes between them
+          if (is_hole(m_obs, l_obs) or is_hole(m_obs, r_obs)) {
+            //How we choose the best movement?
+            //Random? By now we're choosing the first...
+            calculate_point_to_move(m_obs, l_obs);
+            this->darwin_state = CALCULATE_MOVEMENT;
+          }
+          else { //That means there's no hole, nor left or right
+            //So we move towards to the less occupied sector (at the end of both loops)
+            //We can avoid that else and if we don't enter the 'if' above
+            //Use the 'min_density' pair to calculate the next movement...
+
+          }
+        }
+    }
+
+    //ocupation is a vector which indicates the sector concerning to the k obstacle
+    //in the first element of the pair and indicates the ocupation coeficient (equal for
+    //each obstacle in a sector) in the second element of the pair
+
+
     //salto directamente al siguiente estado!
     this->darwin_state = CALCULATE_MOVEMENT;
 }
@@ -599,6 +630,26 @@ void CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2) {
         this->next_x_mov = obs1->pos.x + 0.25;
         this->next_z_mov = obs1->pos.z;
     }
+}
+
+void CeabotMazeAlgNode::get_immediate_obs (const vector <std::qr_info> &sektor, qr_info &middle_obs, qr_info &obs1, qr_info &obs2) {
+  //Given a sector 'i' and the QR of that sector we want to return via parameters obs1 and obs2
+  obs1.qr_tag = obs2.qr_tag = "NULL"; //Before using obs1 and obs2 check the qr_tag...
+  obs1.pos = obs2.pos = middle_obs.pos;
+
+  for (int k = 0; k < sektor.size(); ++k) {
+    qr_info aux = sektor [k];
+    //obs1 is the left obstacle and obs2 is the right obstacle
+
+    if (aux.qr_tag != middle_obs.qr_tag) {
+      if (middle_obs.pos.y > aux.pos.y) {
+        if (aux.pos.y > obs1.pos.y) obs1 = aux;
+      }
+      else {
+        if (aux.pos.y < obs2.pos.y) obs2 = aux;
+      }
+    }
+  }
 }
 
 std::pair<std::string, int> CeabotMazeAlgNode::divide_qr_tag (std::string qr_tag) {

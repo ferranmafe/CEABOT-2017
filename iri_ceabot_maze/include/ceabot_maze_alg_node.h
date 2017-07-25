@@ -295,6 +295,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void calculate_point_to_move(qr_info* obs1, qr_info* obs2);
 
+      void get_immediate_obs (const vector <std::qr_info> &sektor, qr_info &middle_obs, qr_info& obs1, qr_info obs2);
+
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
     // [diagnostic functions]
 
