@@ -93,8 +93,8 @@
         type="qr_detector"
         output="screen"
         ns="/darwin">
-        <param name="qr_x" value="0.12"/>
-        <param name="qr_y" value="0.12"/>
+        <param name="qr_x" value="0.20"/>
+        <param name="qr_y" value="0.20"/>
         <param name="camera_frame" value="/darwin/camera_link"/>
         <remap from="/darwin/qr_detector/camera/image_raw"
                  to="/darwin/camera/image_raw"/>

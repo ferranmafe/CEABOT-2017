@@ -163,7 +163,6 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     int    turn_left;
     int    fallen_state;
     int    direction;
-
     double next_x_mov;
     double next_z_mov;
 
@@ -287,6 +286,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       static bool density_sort(std::pair <int,double> k, std::pair <int,double> l);
 
+      static bool distance_sort (qr_info o, qr_info p);
+
       void find_holes(void);
 
       bool is_hole(qr_info* obs1, qr_info* obs2);
@@ -295,7 +296,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void calculate_point_to_move(qr_info* obs1, qr_info* obs2);
 
-      void get_immediate_obs (const vector <std::qr_info> &sektor, qr_info &middle_obs, qr_info& obs1, qr_info obs2);
+      void get_immediate_obs (int m, int i, qr_info& obs1, qr_info &obs2);
 
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
     // [diagnostic functions]
