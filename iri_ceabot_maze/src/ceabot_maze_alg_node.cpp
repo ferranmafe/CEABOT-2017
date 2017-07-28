@@ -191,8 +191,9 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
         tf::Transform t;
         t.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
         t.setRotation(tf::createQuaternionFromRPY(0.0, 0.0, this->current_pan_angle));
-        tf::Vector3 in(msg->tags[i].position.x, msg->tags[i].position.y, msg->tags[i].position.z);
-        tf::Vector3 out = t.operator*(in);
+
+        tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
+        tf::Vector3 out = t.operator()(in);
 
         qr_info aux;
         aux.qr_tag = msg->tags[i].tag_id;
@@ -319,8 +320,10 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
 
 void CeabotMazeAlgNode::calculate_next_move(void) {
     this->nm_x = sqrt(pow(this->next_x_mov, 2) + pow(this->next_z_mov, 2));
-    this->nm_alpha = DegtoRad(atan2(this->next_z_mov, this->next_x_mov));
+    this->nm_alpha =  -(PI/2.0 - atan2(this->next_z_mov, this->next_x_mov));
     this->darwin_state = MOVEMENT_ALPHA;
+
+    std::cout << "rad: " << nm_x << " alpha: " << nm_alpha << std::endl;
 }
 
 void CeabotMazeAlgNode::darwin_movement_alpha(double alpha) { //angle to perform
@@ -537,6 +540,7 @@ void CeabotMazeAlgNode::search_for_goal_qr (void) {
                     this->next_x_mov = this->qr_information[i][j].pos.x;
                     this->next_z_mov = this->qr_information[i][j].pos.z;
 
+                    std::cout << this->next_x_mov << " " << this->next_z_mov << std::endl;
                     this->darwin_state = CALCULATE_MOVEMENT;
                 }
             }
@@ -553,6 +557,7 @@ void CeabotMazeAlgNode::search_for_goal_qr (void) {
                     this->next_x_mov = this->qr_information[i][j].pos.x ;
                     this->next_z_mov = this->qr_information[i][j].pos.z;
 
+                    std::cout << this->next_x_mov << " " << this->next_z_mov << std::endl;
                     this->darwin_state = CALCULATE_MOVEMENT;
                 }
             }
@@ -601,11 +606,11 @@ bool CeabotMazeAlgNode::distance_sort (qr_info o, qr_info p) {
   xo = o.pos.x; xp = p.pos.x;
   zo = o.pos.z; zp = p.pos.z;
 
-  if (xo > xp) return true;
-  else if (xo < xp) return false;
+  if (xo > xp) return false;
+  else if (xo < xp) return true;
   else {
-    if (zo > zp) return true;
-    else if (zo < zp) return false;
+    if (zo > zp) return false;
+    else if (zo < zp) return true;
     else return true;
   }
 
@@ -697,16 +702,17 @@ void CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2) {
       std::cout << "------------" << std::endl;
       std::cout << "------------ " << obs2->qr_tag << std::endl;
       std::cout << "------------" << std::endl;
-        this->next_x_mov = obs2->pos.x + 0.35;
+        this->next_x_mov = obs2->pos.x;
         this->next_z_mov = obs2->pos.z;
     }
     else if (obs2 == NULL) {
       std::cout << "------------" << std::endl;
       std::cout << obs1->qr_tag << "------------" << std::endl;
       std::cout << "------------" << std::endl;
-        this->next_x_mov = obs1->pos.x - 0.35;
+        this->next_x_mov = obs1->pos.x;
         this->next_z_mov = obs1->pos.z;
     }
+    std::cout << this->next_x_mov << " " << this->next_z_mov << std::endl;
 
 }
 
