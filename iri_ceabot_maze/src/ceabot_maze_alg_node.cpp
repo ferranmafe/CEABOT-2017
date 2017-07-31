@@ -187,7 +187,9 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
     if (this->searching_for_qr) {
       int zone_to_scan = actual_zone_to_scan();
       std::vector<qr_info> vec_aux;
-      for (int i = 0; i < msg->tags.size(); ++i) {
+        for (int i = 0; i < msg->tags.size(); ++i) {
+
+
         tf::Transform t;
         t.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
         t.setRotation(tf::createQuaternionFromRPY(0.0, 0.0, this->current_pan_angle));
@@ -201,11 +203,19 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
         //aux.pos.x = msg->tags[i].position.x;    aux.pos.y = msg->tags[i].position.y;    aux.pos.z = msg->tags[i].position.z;
         aux.ori.x = msg->tags[i].orientation.x; aux.ori.y = msg->tags[i].orientation.y; aux.ori.z = msg->tags[i].orientation.z; aux.ori.w = msg->tags[i].orientation.w;
 
+        std::cout << std::endl;
+        std::cout << "Rotation angle: " << this->current_pan_angle << std::endl;
+        std::cout << "Tag ID: " << msg->tags[i].tag_id << std::endl;
+        std::cout <<  "Old X pos: " << msg->tags[i].position.x << " Old Y pos: " << msg->tags[i].position.y << " Old Z pos: " <<  msg->tags[i].position.z << std::endl;
+        std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
+        std::cout << std::endl;
+
         vec_aux.push_back(aux);
       }
       std::sort(vec_aux.begin(), vec_aux.end(), distance_sort);
       qr_information [zone_to_scan] = vec_aux;
     }
+
   }
   this->qr_pose_mutex_exit();
 }
@@ -308,7 +318,7 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
         for (int j = 0; j < qr_information[i].size(); ++j) {
           std::cout << std::endl;
           std::cout << qr_information[i][j].qr_tag << std::endl;
-          std::cout << "X pos: " << qr_information[i][j].pos.x << " Z pos: " << qr_information[i][j].pos.z << std::endl;
+          std::cout << "X pos: " << qr_information[i][j].pos.x << " Y pos: " << qr_information[i][j].pos.y << " Z pos: " << qr_information[i][j].pos.z << std::endl;
           std::cout << "---------------------------------" << std::endl;
           std::cout << std::endl;
         }
