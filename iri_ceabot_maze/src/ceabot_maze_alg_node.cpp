@@ -137,7 +137,7 @@ void CeabotMazeAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg) {
   //use appropiate mutex to shared variables if necessary
   //this->alg_.lock();
   //this->odom_mutex_enter();
-  if (this->fallen_state == 0) {
+  if (this->fallen_state != 0) {
     this->odom_xpre_fall = msg->pose.pose.position.x;
     this->odom_ypre_fall = msg->pose.pose.position.y;
   }
@@ -190,33 +190,36 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
   tf::TransformListener listener;
-  geometry_msgs::PoseStamped::ConstPtr transformed_pose;
-  geometry_msgs::PoseStamped::ConstPtr pose;
+  geometry_msgs::PoseStamped transformed_pose;
+  geometry_msgs::PoseStamped pose;
   if (msg->tags.size()>0) {
     if (this->searching_for_qr) {
       int zone_to_scan = actual_zone_to_scan();
       std::vector<qr_info> vec_aux;
       for (int i = 0; i < msg->tags.size(); ++i) {
+        bool ready_to_transform = false;
         fill_PoseStamped(i, msg, pose);
-        listener.waitForTransform("/base_link", msg->tags[i].header.frame_id , ros::Time::now(), ros::Duration(0.08333), ros::Duration(0.01));
-        tf::TransformListener::transformPose("/base_link", pose, transformed_pose);
-        //tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
-        //tf::Vector3 out = t.operator()(in);
+        ready_to_transform = listener.waitForTransform("/base_link", msg->tags[i].header.frame_id , ros::Time::now(), ros::Duration(0.08333), ros::Duration(0.01));
+        if (ready_to_transform) {
+          listener.transformPose("/base_link", pose, transformed_pose);
+          //tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
+          //tf::Vector3 out = t.operator()(in);
 
-        qr_info aux;
-        aux.qr_tag = msg->tags[i].tag_id;
-        //aux.pos.x = out.x(); aux.pos.y = out.y(); aux.pos.z = out.z();
-        aux.pos.x = transformed_pose->pose.position.x; aux.pos.y = transformed_pose->pose.position.y; aux.pos.z = transformed_pose->pose.position.z;
-        aux.ori.x = transformed_pose->pose.orientation.x; aux.ori.y = transformed_pose->pose.orientation.y; aux.ori.z = transformed_pose->pose.orientation.z; aux.ori.w = transformed_pose->pose.orientation.w;
+          qr_info aux;
+          aux.qr_tag = msg->tags[i].tag_id;
+          //aux.pos.x = out.x(); aux.pos.y = out.y(); aux.pos.z = out.z();
+          aux.pos.x = transformed_pose.pose.position.x; aux.pos.y = transformed_pose.pose.position.y; aux.pos.z = transformed_pose.pose.position.z;
+          aux.ori.x = transformed_pose.pose.orientation.x; aux.ori.y = transformed_pose.pose.orientation.y; aux.ori.z = transformed_pose.pose.orientation.z; aux.ori.w = transformed_pose.pose.orientation.w;
 
-        std::cout << std::endl;
-        std::cout << "Rotation angle: " << this->current_pan_angle << std::endl;
-        std::cout << "Tag ID: " << msg->tags[i].tag_id << std::endl;
-        std::cout <<  "Old X pos: " << msg->tags[i].position.x << " Old Y pos: " << msg->tags[i].position.y << " Old Z pos: " <<  msg->tags[i].position.z << std::endl;
-        std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
-        std::cout << std::endl;
+          std::cout << std::endl;
+          std::cout << "Rotation angle: " << this->current_pan_angle << std::endl;
+          std::cout << "Tag ID: " << msg->tags[i].tag_id << std::endl;
+          std::cout <<  "Old X pos: " << msg->tags[i].position.x << " Old Y pos: " << msg->tags[i].position.y << " Old Z pos: " <<  msg->tags[i].position.z << std::endl;
+          std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
+          std::cout << std::endl;
 
-        vec_aux.push_back(aux);
+          vec_aux.push_back(aux);
+        }
       }
       std::sort(vec_aux.begin(), vec_aux.end(), distance_sort);
       qr_information [zone_to_scan] = vec_aux;
@@ -843,13 +846,11 @@ int CeabotMazeAlgNode::actual_zone_to_scan(void) {
     }
 }
 
-void fill_PoseStamped (int i, onst humanoid_common_msgs::tag_pose_array::ConstPtr &in, geometry_msgs::PoseStamped::ConstPtr &out) {
-  out->header.seq = in->header.seq;
-  out->header.stamp = in->header.stamp;
-  out->header.frame_id = in->header.frame_id;
+void CeabotMazeAlgNode::fill_PoseStamped (int i, const humanoid_common_msgs::tag_pose_array::ConstPtr &in, geometry_msgs::PoseStamped &out) {
+  out.header = in->header;
 
-  out->pose.position = in->tags [i].position;
-  out->pose.orientation = in->tags [i].orientation;
+  out.pose.orientation = in->tags [i].orientation;
+  out.pose.position = in->tags [i].position;
 }
 
 /* main function */

@@ -304,7 +304,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void get_immediate_obs (int m, int i, qr_info& obs1, qr_info &obs2);
 
-      void fill_PoseStamped (int i, const humanoid_common_msgs::tag_pose_array::ConstPtr &in, geometry_msgs::PoseStamped::ConstPtr &out);
+      void fill_PoseStamped (int i, const humanoid_common_msgs::tag_pose_array::ConstPtr &in, geometry_msgs::PoseStamped &out);
 
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
     // [diagnostic functions]
