@@ -196,24 +196,12 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
     if (this->searching_for_qr) {
       int zone_to_scan = actual_zone_to_scan();
       std::vector<qr_info> vec_aux;
-<<<<<<< HEAD
       for (int i = 0; i < msg->tags.size(); ++i) {
         fill_PoseStamped(i, msg, pose);
         listener.waitForTransform("/base_link", msg->tags[i].header.frame_id , ros::Time::now(), ros::Duration(0.08333), ros::Duration(0.01));
         tf::TransformListener::transformPose("/base_link", pose, transformed_pose);
         //tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
         //tf::Vector3 out = t.operator()(in);
-=======
-        for (int i = 0; i < msg->tags.size(); ++i) {
-
-
-        tf::Transform t;
-        t.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
-        t.setRotation(tf::createQuaternionFromRPY(0.0, 0.0, this->current_pan_angle));
-
-        tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
-        tf::Vector3 out = t.operator()(in);
->>>>>>> 42bfee1feb9f7e70208891db74b1cae2020e6e38
 
         qr_info aux;
         aux.qr_tag = msg->tags[i].tag_id;
