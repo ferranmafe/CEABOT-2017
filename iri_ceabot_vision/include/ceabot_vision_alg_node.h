@@ -40,6 +40,7 @@
 #include <sensor_msgs/JointState.h>
 #include <humanoid_common_msgs/tag_pose_array.h>
 #include <string>
+#include <math.h>
 #include <tf/tf.h>
 // [service client headers]
 
@@ -151,6 +152,8 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
     double current_tilt_angle;
 
     bool search_started;
+
+    double old_goal_bno;
 
     //Parameter to access to the data of the .cfg file
     Config config_;

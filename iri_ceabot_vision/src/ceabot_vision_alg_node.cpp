@@ -18,6 +18,7 @@ CeabotVisionAlgNode::CeabotVisionAlgNode(void) :
   this->turn_angle = 0.0;
   this->QR_identifier = "None";
   this->turn_left = 1;
+  this->old_goal_bno = -PI/2.0;
   //this->loop_rate_ = 2;//in [Hz]
 
   // [init publishers]
@@ -215,8 +216,29 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
   {
     //std::cout << this->QR_identifier << std::endl;
     if (this->darwin_state == IDLE and this->event_start and this->QR_identifier == "None") {
-      this->darwin_state = MOVEMENT;
-      this->QR_identifier = msg->tags[0].tag_id; //Se puede añadir en un and que la posicion sea distinta a todos los leidos anteriormente
+      if (msg->tags.size() == 1) {
+        this->darwin_state = MOVEMENT;
+        this->QR_identifier = msg->tags[0].tag_id; //Se puede añadir en un and que la posicion sea distinta a todos los leidos anteriormente
+      }
+      else {
+          std::string aux_tag_id = msg->tags[0].tag_id;
+          double x_tag_aux = msg->tags[0].position.x;
+          double z_tag_aux = msg->tags[0].position.z;
+          double qr_difference_respect_goal = abs((this->bno055_measurement + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux)) - (this->old_goal_bno + this->turn_angle));
+
+          for (int i = 1; i < msg->tags.size(); ++i) {
+              double new_qr_difference_to_test = abs((this->bno055_measurement + obtain_angle_against_darwins_head(msg->tags[i].position.x, msg->tags[i].position.z)) - (this->old_goal_bno + this->turn_angle));
+              if (new_qr_difference_to_test < qr_difference_respect_goal) {
+                  qr_difference_respect_goal = new_qr_difference_to_test;
+                  aux_tag_id = msg->tags[i].tag_id;
+                  x_tag_aux = msg->tags[i].position.x;
+                  z_tag_aux = msg->tags[i].position.z;
+              }
+          }
+          this->darwin_state = MOVEMENT;
+          this->QR_identifier = aux_tag_id;
+      }
+      this->old_goal_bno = this->bno055_measurement + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux);
     }
     //this->pan_angle=this->current_pan_angle+atan2(msg->tags[0].position.x,msg->tags[0].position.z);
     //this->tilt_angle=this->current_tilt_angle+atan2(msg->tags[0].position.y,msg->tags[0].position.z);
@@ -435,6 +457,11 @@ double CeabotVisionAlgNode::saturate (double alpha) {
   std::cout << "La saturacion nos da:: " << alpha << ' ' << std::endl;
   return alpha;
 }
+
+double CeabotVisionAlgNode::obtain_angle_against_darwins_head(double x, double z){
+    return atan2(x / z);
+}
+
 
 /* main function */
 int main(int argc,char *argv[]){
