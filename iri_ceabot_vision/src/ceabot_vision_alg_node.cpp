@@ -217,10 +217,12 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
     //std::cout << this->QR_identifier << std::endl;
     if (this->darwin_state == IDLE and this->event_start and this->QR_identifier == "None") {
       if (msg->tags.size() == 1) {
+        std::cout << "1 QR tag detected" << std::endl;
         this->darwin_state = MOVEMENT;
         this->QR_identifier = msg->tags[0].tag_id; //Se puede añadir en un and que la posicion sea distinta a todos los leidos anteriormente
       }
       else {
+          std::cout << "More than 1 QR tags detected" << std::endl;
           std::string aux_tag_id = msg->tags[0].tag_id;
           double x_tag_aux = msg->tags[0].position.x;
           double z_tag_aux = msg->tags[0].position.z;
