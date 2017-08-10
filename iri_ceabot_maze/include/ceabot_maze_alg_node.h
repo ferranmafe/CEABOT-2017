@@ -49,6 +49,7 @@
 #include <vector>
 #include <math.h>
 #include <tf/tf.h>
+#include <tf/transform_listener.h>
 
 
 
@@ -72,6 +73,7 @@
                MOVEMENT_X,
                CHECK_GOAL_ALPHA,
                CHECK_GOAL_XY,
+               FALLEN_DARWIN,
                IS_DARWIN_STANDING
                } darwin_states;
 
@@ -138,7 +140,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     * Is updated everytime function config_update() is called.
     */
     bool event_start;
-    darwin_states darwin_state;
+    darwin_states darwin_state; //Actual
+    darwin_states old_darwin_state; //Old
     bool half_maze_achieved;
 
     bool search_started;
@@ -158,6 +161,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     double bno055_measurement;
     double odom_x;
     double odom_y;
+    double odom_xpre_fall;
+    double odom_ypre_fall;
     double mov_alpha_goal;
     double mov_x_goal;
     double mov_y_goal;
@@ -298,6 +303,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       void calculate_point_to_move(qr_info* obs1, qr_info* obs2);
 
       void get_immediate_obs (int m, int i, qr_info& obs1, qr_info &obs2);
+
+      void fill_PoseStamped (int i, const humanoid_common_msgs::tag_pose_array::ConstPtr &in, geometry_msgs::PoseStamped::ConstPtr &out);
 
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
     // [diagnostic functions]

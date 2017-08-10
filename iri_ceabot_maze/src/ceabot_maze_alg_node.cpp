@@ -8,6 +8,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   //init class attributes if necessary
   //this->loop_rate_ = 2;//in [Hz]
   this->event_start = true;
+  this->old_darwin_state = IDLE; //To avoid some possible bugs...
   this->darwin_state = SCAN_MAZE;
   this->half_maze_achieved = false;
 
@@ -15,7 +16,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
 
   this->direction = 0;
   this->turn_left = 1;
-  this->fallen_state = -1;
+  this->fallen_state = 0;
   this->qr_information = std::vector < std::vector <qr_info> > (5);
   // [init publishers]
 
@@ -90,8 +91,7 @@ void CeabotMazeAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& ms
   //this->alg_.lock();
   //this->fallen_state_mutex_enter();
   this->fallen_state = msg->data;
-
-  //if (msg->data == 0 or msg->data == 1) this->darwin_state = IS_DARWIN_STANDING; //No creo que lo mejor sea saltar directamente, habria que guardarse el estado anterior o algo por el estilo... (idk)
+  if (msg->data == 0 or msg->data == 1) this->darwin_state = FALLEN_DARWIN; //No creo que lo mejor sea saltar directamente, habria que guardarse el estado anterior o algo por el estilo... (idk)
 
   //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
@@ -137,6 +137,12 @@ void CeabotMazeAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg) {
   //use appropiate mutex to shared variables if necessary
   //this->alg_.lock();
   //this->odom_mutex_enter();
+  if (this->fallen_state == 0) {
+    this->odom_xpre_fall = msg->pose.pose.position.x;
+    this->odom_ypre_fall = msg->pose.pose.position.y;
+  }
+  else this->darwin_state = FALLEN_DARWIN;
+
   this->odom_x = msg->pose.pose.position.x;
   this->odom_y = msg->pose.pose.position.y;
   //std::cout << msg->data << std::endl;
@@ -183,23 +189,25 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
+  tf::TransformListener listener;
+  geometry_msgs::PoseStamped::ConstPtr transformed_pose;
+  geometry_msgs::PoseStamped::ConstPtr pose;
   if (msg->tags.size()>0) {
     if (this->searching_for_qr) {
       int zone_to_scan = actual_zone_to_scan();
       std::vector<qr_info> vec_aux;
       for (int i = 0; i < msg->tags.size(); ++i) {
-        tf::Transform t;
-        t.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
-        t.setRotation(tf::createQuaternionFromRPY(0.0, 0.0, this->current_pan_angle));
-
-        tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
-        tf::Vector3 out = t.operator()(in);
+        fill_PoseStamped(i, msg, pose);
+        listener.waitForTransform("/base_link", msg->tags[i].header.frame_id , ros::Time::now(), ros::Duration(0.08333), ros::Duration(0.01));
+        tf::TransformListener::transformPose("/base_link", pose, transformed_pose);
+        //tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
+        //tf::Vector3 out = t.operator()(in);
 
         qr_info aux;
         aux.qr_tag = msg->tags[i].tag_id;
-        aux.pos.x = out.x(); aux.pos.y = out.y(); aux.pos.z = out.z();
-        //aux.pos.x = msg->tags[i].position.x;    aux.pos.y = msg->tags[i].position.y;    aux.pos.z = msg->tags[i].position.z;
-        aux.ori.x = msg->tags[i].orientation.x; aux.ori.y = msg->tags[i].orientation.y; aux.ori.z = msg->tags[i].orientation.z; aux.ori.w = msg->tags[i].orientation.w;
+        //aux.pos.x = out.x(); aux.pos.y = out.y(); aux.pos.z = out.z();
+        aux.pos.x = transformed_pose->pose.position.x; aux.pos.y = transformed_pose->pose.position.y; aux.pos.z = transformed_pose->pose.position.z;
+        aux.ori.x = transformed_pose->pose.orientation.x; aux.ori.y = transformed_pose->pose.orientation.y; aux.ori.z = transformed_pose->pose.orientation.z; aux.ori.w = transformed_pose->pose.orientation.w;
 
         vec_aux.push_back(aux);
       }
@@ -276,6 +284,7 @@ void CeabotMazeAlgNode::scan_maze(void) {
 
     this->searching_for_qr = false;
     this->darwin_state = WAIT_FOR_SCAN;
+    this->old_darwin_state = SCAN_MAZE;
 }
 
 void CeabotMazeAlgNode::wait_for_scan(void) {
@@ -316,12 +325,15 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
 
     }
   }
+  this->old_darwin_state = WAIT_FOR_SCAN;
 }
 
 void CeabotMazeAlgNode::calculate_next_move(void) {
     this->nm_x = sqrt(pow(this->next_x_mov, 2) + pow(this->next_z_mov, 2));
     this->nm_alpha =  -(PI/2.0 - atan2(this->next_z_mov, this->next_x_mov));
+
     this->darwin_state = MOVEMENT_ALPHA;
+    this->old_darwin_state = CALCULATE_MOVEMENT;
 
     std::cout << "rad: " << nm_x << " alpha: " << nm_alpha << std::endl;
 }
@@ -334,7 +346,10 @@ void CeabotMazeAlgNode::darwin_movement_alpha(double alpha) { //angle to perform
     double alpha_sat = saturate_alpha(get_magnitude_alpha(this->mov_alpha_goal, this->bno055_measurement));
 
     this->walk.set_steps_size(0.0, 0.0, this->config_.p * alpha_sat * this->turn_left);
+
     this->darwin_state = CHECK_GOAL_ALPHA;
+    this->old_darwin_state = MOVEMENT_ALPHA;
+
 
 }
 
@@ -345,7 +360,10 @@ void CeabotMazeAlgNode::darwin_movement_x(double x) {
 
   double x_sat = saturate_movement(x);
   this->walk.set_steps_size(x_sat, 0.0, 0.0);
+
   this->darwin_state = CHECK_GOAL_XY;
+  this->old_darwin_state = MOVEMENT_X;
+
 }
 
 void CeabotMazeAlgNode::check_goal_alpha(double goal) {
@@ -358,6 +376,8 @@ void CeabotMazeAlgNode::check_goal_alpha(double goal) {
   else {
     double tom = saturate_alpha(this->config_.p * diff * this->turn_left);
     this->walk.set_steps_size(0.0, 0.0, tom);
+    this->old_darwin_state = CHECK_GOAL_ALPHA;
+
   }
 }
 
@@ -368,12 +388,15 @@ void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
   if ((diffx >= -this->config_.ERROR_PERMES and diffx <= this->config_.ERROR_PERMES) and (diffy >= -this->config_.ERROR_PERMES and diffy <= this->config_.ERROR_PERMES)) {
     ROS_INFO("XY goal achieved, soon I'll be moving on!");
     this->walk.stop();
-    this->darwin_state = IS_DARWIN_STANDING; //ANADIR QUE SE HAGA LA TRANSICION DE ESTADOS EN LA INTERRUPCION!
+    this->darwin_state = FALLEN_DARWIN; //ANADIR QUE SE HAGA LA TRANSICION DE ESTADOS EN LA INTERRUPCION!
+
   }
   else {
     double tom = saturate_movement(this->config_.p * ((diffx+diffy)/2.0));
     this->walk.set_steps_size(tom, 0.0, 0.0);
   }
+
+    this->darwin_state = CHECK_GOAL_XY;
 }
 
 void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion los cambios de estado que son unicos, o sea, que son transiciones simples...
@@ -435,7 +458,7 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
       check_goal_xy(this->mov_x_goal, this->mov_y_goal);
       break;
 
-    case IS_DARWIN_STANDING:
+    case FALLEN_DARWIN:
       ROS_INFO("Checking Darwin integrity...");
       if (!this->walk.is_finished()) this->walk.stop();
       if (this->action.is_finished()) {
@@ -446,10 +469,19 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
           this->action.execute(11);
         }
       }
-      this->darwin_state = SCAN_MAZE;
+
+      this->darwin_state = IS_DARWIN_STANDING;
+
       break;
 
+    case IS_DARWIN_STANDING:
+      ROS_INFO("Waiting for Darwin to be upwards...");
+      if (this->action.is_finished()) {
+        this->darwin_state = this->old_darwin_state;
+        this->old_darwin_state = IS_DARWIN_STANDING;
+      }
   }
+
 }
 
 double CeabotMazeAlgNode::DegtoRad (double degree) {
@@ -564,6 +596,8 @@ void CeabotMazeAlgNode::search_for_goal_qr (void) {
         }
     } //Incoherente, haga lo que haga se va a calcular la densidad...
     this->darwin_state = CALCULATE_DENSITY;
+    this->old_darwin_state = SEARCH_FOR_GOAL_QR;
+
 }
 
 void CeabotMazeAlgNode::calculate_density(void) {
@@ -585,6 +619,8 @@ void CeabotMazeAlgNode::calculate_density(void) {
 
     this->ocupation = vec_aux;
     this->darwin_state = FIND_HOLES;
+    this->old_darwin_state = CALCULATE_DENSITY;
+
 }
 
 bool CeabotMazeAlgNode::density_sort (std::pair <int,double> k, std::pair <int,double> l) {
@@ -674,6 +710,8 @@ void CeabotMazeAlgNode::find_holes(void) {
     }
     //salto directamente al siguiente estado!
     this->darwin_state = CALCULATE_MOVEMENT;
+    this->old_darwin_state = FIND_HOLES;
+
 }
 
 bool CeabotMazeAlgNode::is_wall(qr_info* obs1) {
@@ -795,6 +833,15 @@ int CeabotMazeAlgNode::actual_zone_to_scan(void) {
     else if (this->current_pan_angle > DegtoRad(67.5) and this->current_pan_angle <= DegtoRad(112.5)) {
         return 0;
     }
+}
+
+void fill_PoseStamped (int i, onst humanoid_common_msgs::tag_pose_array::ConstPtr &in, geometry_msgs::PoseStamped::ConstPtr &out) {
+  out->header.seq = in->header.seq;
+  out->header.stamp = in->header.stamp;
+  out->header.frame_id = in->header.frame_id;
+
+  out->pose.position = in->tags [i].position;
+  out->pose.orientation = in->tags [i].orientation;
 }
 
 /* main function */
