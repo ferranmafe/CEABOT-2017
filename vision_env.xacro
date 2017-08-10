@@ -1,0 +1,17 @@
+<robot name="bioloid" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find bioloid_description)/urdf/ceabot/obstacle_base.xacro" />
+  <xacro:include filename="$(find bioloid_description)/urdf/ceabot/obstacle_vis.xacro" />
+
+  <xacro:obstacle_base name="obstacle_base"/>
+  <!--         0        45      90       135      180        225      270     315   -->
+  <!-- cosine: 1      0.707     0      -0.707     -1       -0.707      0     0.707  -->
+  <!-- sine:   0      0.707     1       0.707      0       -0.707     -1    -0.707  -->
+  <xacro:obstacle_vis name="obstacle1" parent="obstacle_base" center_x="1.015" center_y="1.265" distance="0.75" angle="0" cosine="1" sine="0" code="turn_right_90"/>
+  <xacro:obstacle_vis name="obstacle2" parent="obstacle_base" center_x="1.015" center_y="1.265" distance="0.75" angle="0.79" cosine="0.707" sine="0.707" code="turn_right_135"/>
+  <xacro:obstacle_vis name="obstacle4" parent="obstacle_base" center_x="1.015" center_y="1.265" distance="0.75" angle="3.93" cosine="-0.707" sine="-0.707" code="turn_right_180"/>
+  <xacro:obstacle_vis name="obstacle5" parent="obstacle_base" center_x="1.015" center_y="1.265" distance="0.75" angle="4.71" cosine="0" sine="-1" code="turn_left_45"/>
+  <xacro:obstacle_vis name="obstacle6" parent="obstacle_base" center_x="1.015" center_y="1.265" distance="0.75" angle="1.57" cosine="0" sine="1" code="turn_left_180"/>
+  <xacro:obstacle_vis name="obstacle7" parent="obstacle_base" center_x="1.015" center_y="1.265" distance="0.75" angle="3.14" cosine="-1" sine="0" code="turn_left_135"/>
+
+</robot>

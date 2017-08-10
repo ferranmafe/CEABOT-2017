@@ -196,12 +196,24 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
     if (this->searching_for_qr) {
       int zone_to_scan = actual_zone_to_scan();
       std::vector<qr_info> vec_aux;
+<<<<<<< HEAD
       for (int i = 0; i < msg->tags.size(); ++i) {
         fill_PoseStamped(i, msg, pose);
         listener.waitForTransform("/base_link", msg->tags[i].header.frame_id , ros::Time::now(), ros::Duration(0.08333), ros::Duration(0.01));
         tf::TransformListener::transformPose("/base_link", pose, transformed_pose);
         //tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
         //tf::Vector3 out = t.operator()(in);
+=======
+        for (int i = 0; i < msg->tags.size(); ++i) {
+
+
+        tf::Transform t;
+        t.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
+        t.setRotation(tf::createQuaternionFromRPY(0.0, 0.0, this->current_pan_angle));
+
+        tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
+        tf::Vector3 out = t.operator()(in);
+>>>>>>> 42bfee1feb9f7e70208891db74b1cae2020e6e38
 
         qr_info aux;
         aux.qr_tag = msg->tags[i].tag_id;
@@ -209,11 +221,19 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
         aux.pos.x = transformed_pose->pose.position.x; aux.pos.y = transformed_pose->pose.position.y; aux.pos.z = transformed_pose->pose.position.z;
         aux.ori.x = transformed_pose->pose.orientation.x; aux.ori.y = transformed_pose->pose.orientation.y; aux.ori.z = transformed_pose->pose.orientation.z; aux.ori.w = transformed_pose->pose.orientation.w;
 
+        std::cout << std::endl;
+        std::cout << "Rotation angle: " << this->current_pan_angle << std::endl;
+        std::cout << "Tag ID: " << msg->tags[i].tag_id << std::endl;
+        std::cout <<  "Old X pos: " << msg->tags[i].position.x << " Old Y pos: " << msg->tags[i].position.y << " Old Z pos: " <<  msg->tags[i].position.z << std::endl;
+        std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
+        std::cout << std::endl;
+
         vec_aux.push_back(aux);
       }
       std::sort(vec_aux.begin(), vec_aux.end(), distance_sort);
       qr_information [zone_to_scan] = vec_aux;
     }
+
   }
   this->qr_pose_mutex_exit();
 }
@@ -317,7 +337,7 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
         for (int j = 0; j < qr_information[i].size(); ++j) {
           std::cout << std::endl;
           std::cout << qr_information[i][j].qr_tag << std::endl;
-          std::cout << "X pos: " << qr_information[i][j].pos.x << " Z pos: " << qr_information[i][j].pos.z << std::endl;
+          std::cout << "X pos: " << qr_information[i][j].pos.x << " Y pos: " << qr_information[i][j].pos.y << " Z pos: " << qr_information[i][j].pos.z << std::endl;
           std::cout << "---------------------------------" << std::endl;
           std::cout << std::endl;
         }
