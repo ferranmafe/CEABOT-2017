@@ -171,6 +171,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     int    direction;
     double next_x_mov;
     double next_z_mov;
+    tf::TransformListener listener;
 
     std::vector<std::pair <int, double> > ocupation;
     std::vector<std::vector <qr_info> > qr_information;

@@ -189,19 +189,22 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
-  tf::TransformListener listener;
+  std::cout << "entro " << "searching_for_qr: " << this->searching_for_qr  << std::endl;
   geometry_msgs::PoseStamped transformed_pose;
   geometry_msgs::PoseStamped pose;
   if (msg->tags.size()>0) {
     if (this->searching_for_qr) {
+      std::cout << "entro2" << std::endl;
       int zone_to_scan = actual_zone_to_scan();
       std::vector<qr_info> vec_aux;
       for (int i = 0; i < msg->tags.size(); ++i) {
         bool ready_to_transform = false;
         fill_PoseStamped(i, msg, pose);
-        ready_to_transform = listener.waitForTransform("/base_link", msg->tags[i].header.frame_id , ros::Time::now(), ros::Duration(0.08333), ros::Duration(0.01));
+        std::cout << msg->tags[i].header.frame_id << std::endl;
+        ready_to_transform = listener.waitForTransform("darwin/base_link", msg->tags[i].header.frame_id , ros::Time::now(), ros::Duration(0.2), ros::Duration(0.08333));
+        std::cout << "ready_to_transform??: " << ready_to_transform << std::endl;
         if (ready_to_transform) {
-          listener.transformPose("/base_link", pose, transformed_pose);
+          listener.transformPose("darwin/base_link", pose, transformed_pose);
           //tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
           //tf::Vector3 out = t.operator()(in);
 
@@ -313,6 +316,7 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
         this->current_angle_travelled += PI/4.0;
       }
       if (this->direction == -1 or (aux_pan >= (-PI/2.0 - ERROR) and aux_pan <= (-PI/2.0 + ERROR))) {
+        std::cout << "wait for scan entro" << std::endl;
         this->searching_for_qr = true;
         ros::Duration(1.0).sleep();
       }
