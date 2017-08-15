@@ -18,7 +18,7 @@ CeabotVisionAlgNode::CeabotVisionAlgNode(void) :
   this->turn_angle = 0.0;
   this->QR_identifier = "None";
   this->turn_left = 1;
-  this->old_goal_bno = -PI/2.0;
+  this->bno_readed_first_time = false;
   //this->loop_rate_ = 2;//in [Hz]
 
   // [init publishers]
@@ -77,7 +77,7 @@ void CeabotVisionAlgNode::mainNodeThread(void) {
 /*  [subscriber callbacks] */
 void CeabotVisionAlgNode::buttons_callback(const dynamic_reconfigure::Config::ConstPtr& msg)
 {
-  ROS_INFO("CeabotVisionAlgNode::buttons_callback: New Message Received");
+  //ROS_INFO("CeabotVisionAlgNode::buttons_callback: New Message Received");
 
   //use appropiate mutex to shared variables if necessary
   //this->alg_.lock();
@@ -132,6 +132,10 @@ void CeabotVisionAlgNode::imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
   double bnoaux = tf::getYaw(msg->orientation);
   if (bnoaux < 0) bnoaux += 2*PI;
   this->bno055_measurement = bnoaux; //We normalize the measurement...
+  if (!this->bno_readed_first_time) {
+    this->old_goal_bno = bnoaux;
+    this->bno_readed_first_time = true;
+  }
   //ROS_INFO("Darwin Ceabot Vision : The actual Yaw is : %f", this->bno055_measurement);
   //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
@@ -191,7 +195,7 @@ void CeabotVisionAlgNode::joint_states_callback(const sensor_msgs::JointState::C
       this->current_tilt_angle=(msg->position[i]);
     }
   }
-  ROS_INFO("angle_pan: %f angle_tilt: %f",this->current_pan_angle,this->current_tilt_angle);
+  //ROS_INFO("angle_pan: %f angle_tilt: %f",this->current_pan_angle,this->current_tilt_angle);
   //unlock previously blocked shared variables
   //this->alg_.unlock();
   this->joint_states_mutex_exit();
@@ -209,38 +213,68 @@ void CeabotVisionAlgNode::joint_states_mutex_exit(void) {
 
 
 void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
-  //ROS_INFO("QrHeadTrackingAlgNode::qr_pose_callback: New Message Received");
-  //ROS_INFO("Detected %d QR tags",(int)msg->tags.size());
   this->qr_pose_mutex_enter();
   if(msg->tags.size()>0)
   {
-    //std::cout << this->QR_identifier << std::endl;
+    std::cout << obtain_angle_against_darwins_head(msg->tags[0].position.x, msg->tags[0].position.z) << std::endl;
     if (this->darwin_state == IDLE and this->event_start and this->QR_identifier == "None") {
+
+
       if (msg->tags.size() == 1) {
-        std::cout << "1 QR tag detected" << std::endl;
         this->darwin_state = MOVEMENT;
         this->QR_identifier = msg->tags[0].tag_id; //Se puede añadir en un and que la posicion sea distinta a todos los leidos anteriormente
+        double aux_old_goal_bno = this->bno055_measurement + obtain_angle_against_darwins_head(msg->tags[0].position.x, msg->tags[0].position.z);
+        if (aux_old_goal_bno >= 2.0 * PI) aux_old_goal_bno -= 2.0 * PI;
+        this->old_goal_bno = aux_old_goal_bno;
       }
       else {
-          std::cout << "More than 1 QR tags detected" << std::endl;
+          /*std::cout << "----------------------------" << std::endl;
+          std::cout << "More than 1 QR tags detected" << std::endl;*/
           std::string aux_tag_id = msg->tags[0].tag_id;
           double x_tag_aux = msg->tags[0].position.x;
           double z_tag_aux = msg->tags[0].position.z;
-          double qr_difference_respect_goal = abs((this->bno055_measurement + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux)) - (this->old_goal_bno + this->turn_angle));
+
+          double goal_calculated_old_qr = this->old_goal_bno - this->turn_angle;
+          double goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux);
+          double qr_difference_respect_goal = abs(goal_calculated_new_qr - goal_calculated_old_qr);
+          /*std::cout << "TAG ID: " << aux_tag_id << std::endl;
+          std::cout << "Angle against darwin: " << - this->turn_angle << std::endl;
+          std::cout << "Actual position for the QR: " << (this->bno055_measurement - obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux)) << std::endl; // + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux)) << std::endl;
+          std::cout << "Calculo ideal del QR for the QR: " << (this->old_goal_bno + this->turn_angle) << std::endl;
+          std::cout << -PI/2.0 << std::endl;
+          std::cout << "X TAG: " << x_tag_aux << std::endl;
+          std::cout << "Z TAG: " << z_tag_aux << std::endl;
+          std::cout << "QR DIFFERENCE RESPECT GOAL: " << qr_difference_respect_goal << std::endl;
+          std::cout << std::endl;
+          std::cout << std::endl;*/
 
           for (int i = 1; i < msg->tags.size(); ++i) {
-              double new_qr_difference_to_test = abs((this->bno055_measurement + obtain_angle_against_darwins_head(msg->tags[i].position.x, msg->tags[i].position.z)) - (this->old_goal_bno + this->turn_angle));
+              goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(msg->tags[i].position.x, msg->tags[i].position.z);
+              double new_qr_difference_to_test = abs(goal_calculated_new_qr - goal_calculated_old_qr);
+              /*std::cout << "TAG ID: " << msg->tags[i].tag_id << std::endl;
+              std::cout << "NEW QR DIFFERENCE RESPECT GOAL: " << new_qr_difference_to_test << std::endl;*/
+
               if (new_qr_difference_to_test < qr_difference_respect_goal) {
                   qr_difference_respect_goal = new_qr_difference_to_test;
                   aux_tag_id = msg->tags[i].tag_id;
                   x_tag_aux = msg->tags[i].position.x;
                   z_tag_aux = msg->tags[i].position.z;
+                  /*std::cout << "TAG ID: " << aux_tag_id << std::endl;
+                  std::cout << "X TAG: " << x_tag_aux << std::endl;
+                  std::cout << "Z TAG: " << z_tag_aux << std::endl;
+                  std::cout << "QR DIFFERENCE RESPECT GOAL: " << qr_difference_respect_goal << std::endl;
+                  std::cout << std::endl;
+                  std::cout << std::endl;*/
               }
           }
           this->darwin_state = MOVEMENT;
           this->QR_identifier = aux_tag_id;
+          double aux_old_goal_bno = this->bno055_measurement + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux);
+          if (aux_old_goal_bno >= 2.0 * PI) aux_old_goal_bno -= 2.0 * PI;
+          this->old_goal_bno = aux_old_goal_bno;
+          //std::cout << "-----------------" << std::endl;
       }
-      this->old_goal_bno = this->bno055_measurement + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux);
+
     }
     //this->pan_angle=this->current_pan_angle+atan2(msg->tags[0].position.x,msg->tags[0].position.z);
     //this->tilt_angle=this->current_tilt_angle+atan2(msg->tags[0].position.y,msg->tags[0].position.z);
@@ -314,7 +348,7 @@ void CeabotVisionAlgNode::state_machine(void) {
   switch(this->darwin_state) {
     //Case of no movement and no scanning
     case IDLE: //0 ------------------------------------------------------------------------------------------------------------------------------------
-      ROS_INFO("Darwin Ceabot Vision : state IDLE");
+      //ROS_INFO("Darwin Ceabot Vision : state IDLE");
       //if (this->movement_started) {ros::duration.sleep(0.1); this->movement_started = false;} //We wait to get the correct QR...
       //this->darwin_state = MOVEMENT;
 
@@ -336,12 +370,12 @@ void CeabotVisionAlgNode::state_machine(void) {
       //Only enter to this if-condition in the first iteration of the mainNodeThread in
       //MOVEMENT case
       if (!this->movement_started) {
-        ROS_INFO("Darwin Ceabot Vision : state MOVEMENT -> Starting Movement");
+        //ROS_INFO("Darwin Ceabot Vision : state MOVEMENT -> Starting Movement");
         //We have to control manually if the movement is started
         this->movement_started = true;
         //Walk works in rad. We must convert the angle from degrees (QR Code returns
         //the angle in degrees)
-        std::cout << this->QR_identifier << std::endl;
+        //std::cout << this->QR_identifier << std::endl;
         setPanFromQR_id();
         //ROS_INFO("Darwin Ceabot Vision : turn_angle %f, turn_left %f", this->turn_angle, this->turn_left);
         this->turn_angle = this->turn_left*(this->turn_angle * PI) / 180.0;
@@ -350,9 +384,12 @@ void CeabotVisionAlgNode::state_machine(void) {
         this->turn_angle = this->turn_left*get_magnitude(this->goal, this->bno055_measurement);
 
         this->turn_angle = saturate(this->turn_angle); //We must saturate it
+        std::cout << this->turn_angle << std::endl;
         this->walk.set_steps_size(0.0, 0.0, (this->config_.p*(this->turn_angle))); //We multiply the turn angle by a coeficient to deal with the end movement of Darwin (p)
         this->darwin_state = CHECK_GOAL;
       }
+
+
       /*else {
         //We must wait until the movement is finished
         if (this->walk.is_finished()) {
@@ -368,11 +405,11 @@ void CeabotVisionAlgNode::state_machine(void) {
     //Case after movement. Before the next scan we must verify if we've made the
     //movement correctly
     case CHECK_GOAL: {//3 ------------------------------------------------------------------------------------------------------------------
-      ROS_INFO("Darwin Ceabot Vision : state CHECK_GOAL");
+      //ROS_INFO("Darwin Ceabot Vision : state CHECK_GOAL");
       double diff = fabs(this->goal - (this->bno055_measurement));
 
       if (diff >= -(this->config_.ERROR_PERMES) and diff <= this->config_.ERROR_PERMES) {
-        ROS_INFO("Darwin Ceabot Vision : Goal achieved, moving on for the next one!");
+        //ROS_INFO("Darwin Ceabot Vision : Goal achieved, moving on for the next one!");
         this->walk.stop(); //Stop Darwin
         this->darwin_state = WAIT_STOP_WALKING;
       }
@@ -385,7 +422,7 @@ void CeabotVisionAlgNode::state_machine(void) {
     }
 
     case WAIT_STOP_WALKING:
-      ROS_INFO("Darwin Ceabot Vision : state WAIT_STOP_WALKING");
+      //ROS_INFO("Darwin Ceabot Vision : state WAIT_STOP_WALKING");
       if (this->walk.is_finished() and this->walk.get_status() == walk_module_status_t(WALK_MODULE_SUCCESS)) { //If we finished waliing successfully!
         this->movement_started = false;
         this->darwin_state = IDLE;
@@ -418,13 +455,13 @@ void CeabotVisionAlgNode::setPanFromQR_id() {
 }
 
 double CeabotVisionAlgNode::get_magnitude (double alpha, double beta) {
-  std::cout << alpha*180.0/PI << ' ' << beta*180.0/PI << std::endl;
+  //std::cout << alpha*180.0/PI << ' ' << beta*180.0/PI << std::endl;
   double mgn = alpha - beta;
   if (mgn > PI)  //That means we are not performing the best move
     mgn -= 2*PI;
   else if (mgn < (-PI)) //Same case
     mgn += 2*PI;
-  std::cout << mgn << std::endl;
+  //std::cout << mgn << std::endl;
   return fabs(mgn); //We do not return the abs, just because the direction matters
 
 }
@@ -451,17 +488,17 @@ double CeabotVisionAlgNode::saturate (double alpha) {
     MAX_LOWER_LIMIT
     MIN_LOWER_LIMIT
    */
-   std::cout << "pre:ALpha: " << alpha << std::endl;
+  //std::cout << "pre:ALpha: " << alpha << std::endl;
   if (alpha >= this->config_.MAX_UPPER_LIMIT) alpha = this->config_.MAX_UPPER_LIMIT;
   else if (alpha <= this->config_.MIN_UPPER_LIMIT and alpha >= this->config_.MIN_LOWER_LIMIT and alpha > 0) alpha = this->config_.MIN_UPPER_LIMIT;
   else if (alpha <= this->config_.MIN_UPPER_LIMIT and alpha >= this->config_.MIN_LOWER_LIMIT and alpha < 0) alpha = this->config_.MIN_LOWER_LIMIT;
   else if (alpha <= this->config_.MAX_LOWER_LIMIT) alpha = this->config_.MAX_LOWER_LIMIT;
-  std::cout << "La saturacion nos da:: " << alpha << ' ' << std::endl;
+  //std::cout << "La saturacion nos da:: " << alpha << ' ' << std::endl;
   return alpha;
 }
 
 double CeabotVisionAlgNode::obtain_angle_against_darwins_head(double x, double z){
-    return atan2(x / z);
+    return atan2(x, z);
 }
 
 
