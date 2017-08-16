@@ -8,9 +8,9 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   //init class attributes if necessary
   //this->loop_rate_ = 2;//in [Hz]
   this->event_start = true;
-  this->old_darwin_state = IDLE; //To avoid some possible bugs...
   this->darwin_state = SCAN_MAZE;
   this->half_maze_achieved = false;
+  this->first_bno_lecture = true;
 
   this->search_started=false;
 
@@ -91,7 +91,10 @@ void CeabotMazeAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& ms
   //this->alg_.lock();
   //this->fallen_state_mutex_enter();
   this->fallen_state = msg->data;
-  if (msg->data == 0 or msg->data == 1) this->darwin_state = FALLEN_DARWIN; //No creo que lo mejor sea saltar directamente, habria que guardarse el estado anterior o algo por el estilo... (idk)
+  if (msg->data == 0 or msg->data == 1) {
+    this->darwin_state = FALLEN_DARWIN; //No creo que lo mejor sea saltar directamente, habria que guardarse el estado anterior o algo por el estilo... (idk)
+    std::cout << "Fallen detectado con el fallen state callback" << std::endl;
+  }
 
   //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
@@ -116,6 +119,10 @@ void CeabotMazeAlgNode::imu_callback(const sensor_msgs::Imu::ConstPtr& msg) {
   double bnoaux = tf::getYaw(msg->orientation);
   if (bnoaux < 0) bnoaux += 2*PI;
   this->bno055_measurement = bnoaux; //We normalize the measurement...
+  if (this->first_bno_lecture) {
+    this->first_bno_lecture = false;
+    this->north_of_the_maze = bnoaux;
+  }
   //ROS_INFO("Darwin Ceabot Vision : The actual Yaw is : %f", this->bno055_measurement);
   //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
@@ -141,7 +148,10 @@ void CeabotMazeAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg) {
     this->odom_xpre_fall = msg->pose.pose.position.x;
     this->odom_ypre_fall = msg->pose.pose.position.y;
   }
-  else this->darwin_state = FALLEN_DARWIN;
+  else {
+    this->darwin_state = FALLEN_DARWIN;
+    std::cout << "Fallen detectado con el odom callback" << std::endl;
+  }
 
   this->odom_x = msg->pose.pose.position.x;
   this->odom_y = msg->pose.pose.position.y;
@@ -298,7 +308,6 @@ void CeabotMazeAlgNode::scan_maze(void) {
 
     this->searching_for_qr = false;
     this->darwin_state = WAIT_FOR_SCAN;
-    this->old_darwin_state = SCAN_MAZE;
 }
 
 void CeabotMazeAlgNode::wait_for_scan(void) {
@@ -340,7 +349,6 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
 
     }
   }
-  this->old_darwin_state = WAIT_FOR_SCAN;
 }
 
 void CeabotMazeAlgNode::calculate_next_move(void) {
@@ -348,7 +356,6 @@ void CeabotMazeAlgNode::calculate_next_move(void) {
     this->nm_alpha =  -(PI/2.0 - atan2(this->next_z_mov, this->next_x_mov));
 
     this->darwin_state = MOVEMENT_ALPHA;
-    this->old_darwin_state = CALCULATE_MOVEMENT;
 
     std::cout << "rad: " << nm_x << " alpha: " << nm_alpha << std::endl;
 }
@@ -363,7 +370,6 @@ void CeabotMazeAlgNode::darwin_movement_alpha(double alpha) { //angle to perform
     this->walk.set_steps_size(0.0, 0.0, this->config_.p * alpha_sat * this->turn_left);
 
     this->darwin_state = CHECK_GOAL_ALPHA;
-    this->old_darwin_state = MOVEMENT_ALPHA;
 
 
 }
@@ -377,7 +383,6 @@ void CeabotMazeAlgNode::darwin_movement_x(double x) {
   this->walk.set_steps_size(x_sat, 0.0, 0.0);
 
   this->darwin_state = CHECK_GOAL_XY;
-  this->old_darwin_state = MOVEMENT_X;
 
 }
 
@@ -391,7 +396,6 @@ void CeabotMazeAlgNode::check_goal_alpha(double goal) {
   else {
     double tom = saturate_alpha(this->config_.p * diff * this->turn_left);
     this->walk.set_steps_size(0.0, 0.0, tom);
-    this->old_darwin_state = CHECK_GOAL_ALPHA;
 
   }
 }
@@ -404,7 +408,7 @@ void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
     ROS_INFO("XY goal achieved, soon I'll be moving on!");
     this->walk.stop();
     this->darwin_state = FALLEN_DARWIN; //ANADIR QUE SE HAGA LA TRANSICION DE ESTADOS EN LA INTERRUPCION!
-
+    std::cout << "Fallen detectado con el check_goal_xy" << std::endl;
   }
   else {
     double tom = saturate_movement(this->config_.p * ((diffx+diffy)/2.0));
@@ -492,9 +496,20 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
     case IS_DARWIN_STANDING:
       ROS_INFO("Waiting for Darwin to be upwards...");
       if (this->action.is_finished()) {
-        this->darwin_state = this->old_darwin_state;
-        this->old_darwin_state = IS_DARWIN_STANDING;
+        this->darwin_state = MOVEMENT_ALPHA;
+        if (!this->half_maze_achieved){
+          this->nm_alpha = this->north_of_the_maze - this->bno055_measurement;
+        }
+        else {
+          double south_of_the_maze = PI - this->north_of_the_maze;
+          if (south_of_the_maze < 0.0) south_of_the_maze += 2.0 * PI;
+          else if (south_of_the_maze >= 2.0 * PI) south_of_the_maze -= 2.0 * PI;
+
+          this->nm_alpha = south_of_the_maze - this->bno055_measurement;
+        }
+        this->nm_x = 0.0;
       }
+      break;
   }
 
 }
@@ -611,7 +626,6 @@ void CeabotMazeAlgNode::search_for_goal_qr (void) {
         }
     } //Incoherente, haga lo que haga se va a calcular la densidad...
     this->darwin_state = CALCULATE_DENSITY;
-    this->old_darwin_state = SEARCH_FOR_GOAL_QR;
 
 }
 
@@ -634,7 +648,6 @@ void CeabotMazeAlgNode::calculate_density(void) {
 
     this->ocupation = vec_aux;
     this->darwin_state = FIND_HOLES;
-    this->old_darwin_state = CALCULATE_DENSITY;
 
 }
 
@@ -725,7 +738,6 @@ void CeabotMazeAlgNode::find_holes(void) {
     }
     //salto directamente al siguiente estado!
     this->darwin_state = CALCULATE_MOVEMENT;
-    this->old_darwin_state = FIND_HOLES;
 
 }
 

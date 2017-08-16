@@ -128,6 +128,8 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
     //Angle we set to turn!
     double turn_angle;
 
+    double old_turn_angle;
+
     //Class variable that allows Ceabot Vision node to interact with Darwin low level controllers
     //In terms of walking configuration and parameters
     CWalkModule walk;

@@ -18,6 +18,7 @@ CeabotVisionAlgNode::CeabotVisionAlgNode(void) :
   this->turn_angle = 0.0;
   this->QR_identifier = "None";
   this->turn_left = 1;
+  this->old_turn_angle = 0.0;
   this->bno_readed_first_time = false;
   //this->loop_rate_ = 2;//in [Hz]
 
@@ -225,6 +226,7 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
         this->QR_identifier = msg->tags[0].tag_id; //Se puede añadir en un and que la posicion sea distinta a todos los leidos anteriormente
         double aux_old_goal_bno = this->bno055_measurement + obtain_angle_against_darwins_head(msg->tags[0].position.x, msg->tags[0].position.z);
         if (aux_old_goal_bno >= 2.0 * PI) aux_old_goal_bno -= 2.0 * PI;
+        else if (aux_old_goal_bno < 0.0) aux_old_goal_bno += 2.0 * PI;
         this->old_goal_bno = aux_old_goal_bno;
       }
       else {
@@ -234,13 +236,20 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
           double x_tag_aux = msg->tags[0].position.x;
           double z_tag_aux = msg->tags[0].position.z;
 
-          double goal_calculated_old_qr = this->old_goal_bno - this->turn_angle;
+          double goal_calculated_old_qr = this->old_goal_bno + this->old_turn_angle;
+          if (goal_calculated_old_qr >= 2.0 * PI) goal_calculated_old_qr -= 2.0 * PI;
+          else if (goal_calculated_old_qr < 0.0) goal_calculated_old_qr += 2.0 * PI;
+
           double goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux);
-          double qr_difference_respect_goal = abs(goal_calculated_new_qr - goal_calculated_old_qr);
+          if (goal_calculated_new_qr >= 2.0 * PI) goal_calculated_new_qr -= 2.0 * PI;
+          else if (goal_calculated_new_qr < 0.0) goal_calculated_new_qr += 2.0 * PI;
+
+          double qr_difference_respect_goal = goal_calculated_new_qr - goal_calculated_old_qr;
+          if (qr_difference_respect_goal < 0.0) qr_difference_respect_goal *= -1;
           /*std::cout << "TAG ID: " << aux_tag_id << std::endl;
-          std::cout << "Angle against darwin: " << - this->turn_angle << std::endl;
-          std::cout << "Actual position for the QR: " << (this->bno055_measurement - obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux)) << std::endl; // + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux)) << std::endl;
-          std::cout << "Calculo ideal del QR for the QR: " << (this->old_goal_bno + this->turn_angle) << std::endl;
+          std::cout << "Angle against darwin: " << this->old_turn_angle << std::endl;
+          std::cout << "Actual position for the QR: " << (this->bno055_measurement + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux)) << std::endl; // + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux)) << std::endl;
+          std::cout << "Calculo ideal del QR: " << (this->old_goal_bno + this->old_turn_angle) << std::endl;
           std::cout << -PI/2.0 << std::endl;
           std::cout << "X TAG: " << x_tag_aux << std::endl;
           std::cout << "Z TAG: " << z_tag_aux << std::endl;
@@ -250,7 +259,11 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
 
           for (int i = 1; i < msg->tags.size(); ++i) {
               goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(msg->tags[i].position.x, msg->tags[i].position.z);
-              double new_qr_difference_to_test = abs(goal_calculated_new_qr - goal_calculated_old_qr);
+              if (goal_calculated_new_qr >= 2.0 * PI) goal_calculated_new_qr -= 2.0 * PI;
+              else if (goal_calculated_new_qr < 0.0) goal_calculated_new_qr += 2.0 * PI;
+              double new_qr_difference_to_test = goal_calculated_new_qr - goal_calculated_old_qr;
+              if (new_qr_difference_to_test < 0.0) new_qr_difference_to_tests *= -1;
+
               /*std::cout << "TAG ID: " << msg->tags[i].tag_id << std::endl;
               std::cout << "NEW QR DIFFERENCE RESPECT GOAL: " << new_qr_difference_to_test << std::endl;*/
 
@@ -271,6 +284,7 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
           this->QR_identifier = aux_tag_id;
           double aux_old_goal_bno = this->bno055_measurement + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux);
           if (aux_old_goal_bno >= 2.0 * PI) aux_old_goal_bno -= 2.0 * PI;
+          else if (aux_old_goal_bno < 0.0) aux_old_goal_bno += 2.0 * PI;
           this->old_goal_bno = aux_old_goal_bno;
           //std::cout << "-----------------" << std::endl;
       }
@@ -379,12 +393,12 @@ void CeabotVisionAlgNode::state_machine(void) {
         setPanFromQR_id();
         //ROS_INFO("Darwin Ceabot Vision : turn_angle %f, turn_left %f", this->turn_angle, this->turn_left);
         this->turn_angle = this->turn_left*(this->turn_angle * PI) / 180.0;
-
+        this->old_turn_angle = this->turn_angle;
+        std::cout << "Angle to turn: " << this->turn_angle << std::endl;
         this->goal = get_goal(this->turn_angle, this->bno055_measurement);
         this->turn_angle = this->turn_left*get_magnitude(this->goal, this->bno055_measurement);
-
         this->turn_angle = saturate(this->turn_angle); //We must saturate it
-        std::cout << this->turn_angle << std::endl;
+
         this->walk.set_steps_size(0.0, 0.0, (this->config_.p*(this->turn_angle))); //We multiply the turn angle by a coeficient to deal with the end movement of Darwin (p)
         this->darwin_state = CHECK_GOAL;
       }

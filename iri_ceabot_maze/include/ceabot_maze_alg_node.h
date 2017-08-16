@@ -141,13 +141,13 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     */
     bool event_start;
     darwin_states darwin_state; //Actual
-    darwin_states old_darwin_state; //Old
     bool half_maze_achieved;
 
     bool search_started;
     bool goal_achieved;
     bool searching_for_qr;
     bool wall_qr_goal_found;
+    bool first_bno_lecture;
 
     double pan_angle;
     double goal_x;
@@ -166,6 +166,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     double mov_alpha_goal;
     double mov_x_goal;
     double mov_y_goal;
+    double north_of_the_maze;
     int    turn_left;
     int    fallen_state;
     int    direction;
