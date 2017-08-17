@@ -209,6 +209,7 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
           //tf::Vector3 out = t.operator()(in);
 
           qr_info aux;
+          aux.pose = pose;
           aux.qr_tag = msg->tags[i].tag_id;
           //aux.pos.x = out.x(); aux.pos.y = out.y(); aux.pos.z = out.z();
           aux.pos.x = transformed_pose.pose.position.x; aux.pos.y = transformed_pose.pose.position.y; aux.pos.z = transformed_pose.pose.position.z;
@@ -641,7 +642,7 @@ void CeabotMazeAlgNode::calculate_density(void) {
 bool CeabotMazeAlgNode::density_sort (std::pair <int,double> k, std::pair <int,double> l) {
     double i = k.second; double j = l.second;
     if (i > 0.0 and j > 0.0) {
-        return i < j;
+        return i > j;
     }
     else if (i == 0.0 and j > 0.0) {
         return false;
@@ -657,11 +658,11 @@ bool CeabotMazeAlgNode::distance_sort (qr_info o, qr_info p) {
   xo = o.pos.x; xp = p.pos.x;
   zo = o.pos.z; zp = p.pos.z;
 
-  if (xo > xp) return false;
-  else if (xo < xp) return true;
+  if (xo > xp) return true;
+  else if (xo < xp) return false;
   else {
-    if (zo > zp) return false;
-    else if (zo < zp) return true;
+    if (zo > zp) return true;
+    else if (zo < zp) return false;
     else return true;
   }
 
@@ -738,8 +739,25 @@ bool CeabotMazeAlgNode::is_wall(qr_info* obs1) {
 
 bool CeabotMazeAlgNode::is_hole(qr_info* obs1, qr_info* obs2) { //No miras que uno de los dos sea nulo?
     double distance = sqrt(pow(obs1->pos.x - obs2->pos.x, 2) + pow(obs1->pos.z - obs2->pos.z, 2));
-
-    if (is_wall(obs1) or is_wall(obs2)) return false;
+    bool rtt = false;
+    geometry_msgs::PoseStamped transformed_pose;
+    geometry_msgs::PoseStamped pose;
+    if (is_wall(obs1)) {
+      pose = obs2->pose;
+      rtt = listener.waitForTransform(obs1->pose.header.frame_id, obs2->pose.header.frame_id , ros::Time::now(), ros::Duration(0.2), ros::Duration(0.08333));
+      if (rtt) listener.transformPose(obs1->pose.header.frame_id, pose, transformed_pose);
+      std::cout << "distance: " << distance << " x: " << transformed_pose.pose.position.x << std::endl;
+      distance = sqrt(pow(distance, 2) - pow(transformed_pose.pose.position.x, 2));
+    }
+    else if (is_wall(obs2)) {
+      pose = obs1->pose;
+      rtt = listener.waitForTransform(obs2->pose.header.frame_id, obs1->pose.header.frame_id , ros::Time::now(), ros::Duration(0.2), ros::Duration(0.08333));
+      if (rtt) listener.transformPose(obs2->pose.header.frame_id, pose, transformed_pose);
+      std::cout << "distance: " << distance << " x: " << transformed_pose.pose.position.x << std::endl;
+      distance = sqrt(pow(distance, 2) - pow(transformed_pose.pose.position.x, 2));
+    }
+    std::cout << obs1->qr_tag << ' ' << obs2->qr_tag << std::endl;
+    std::cout << "La distancia de pared a obstaculo es: " << rtt << ' ' << distance << std::endl;
     return (distance >= 0.7 - this->config_.ERROR_PERMES and distance >= 0.7 + this->config_.ERROR_PERMES);
 }
 

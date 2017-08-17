@@ -86,6 +86,7 @@ struct orientation {
 };
 
 struct qr_info {
+  geometry_msgs::PoseStamped pose;
   std::string qr_tag; position pos; orientation ori;
 };
 
