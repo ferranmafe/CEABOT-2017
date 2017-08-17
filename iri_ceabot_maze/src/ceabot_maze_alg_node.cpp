@@ -670,11 +670,11 @@ bool CeabotMazeAlgNode::distance_sort (qr_info o, qr_info p) {
   xo = o.pos.x; xp = p.pos.x;
   zo = o.pos.z; zp = p.pos.z;
 
-  if (xo > xp) return false;
-  else if (xo < xp) return true;
+  if (xo > xp) return true;
+  else if (xo < xp) return false;
   else {
-    if (zo > zp) return false;
-    else if (zo < zp) return true;
+    if (zo > zp) return true;
+    else if (zo < zp) return false;
     else return true;
   }
 
