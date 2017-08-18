@@ -135,6 +135,8 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
     //Flag which indicates if a movement is started or not (but it doesn't indicate if the movement is finished)
     bool movement_started;
 
+    bool bno_readed_first_time;
+
     //Class variable that allows Ceabot Vision node to interact with Darwin low level controllers
     //In terms of moving the head camera
     CHeadTrackingModule tracking_module;
@@ -265,6 +267,8 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
        *
        */
        double saturate(double alpha);
+
+       double obtain_angle_against_darwins_head(double x, double z);
 };
 
 #endif
