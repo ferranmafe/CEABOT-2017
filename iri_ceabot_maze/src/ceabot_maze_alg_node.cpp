@@ -209,10 +209,7 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
           //tf::Vector3 out = t.operator()(in);
 
           qr_info aux;
-<<<<<<< HEAD
           aux.pose = pose;
-=======
->>>>>>> 08b0cb53521f3fdc7250efb565a51c1f4a7dc486
           aux.qr_tag = msg->tags[i].tag_id;
           //aux.pos.x = out.x(); aux.pos.y = out.y(); aux.pos.z = out.z();
           aux.pos.x = transformed_pose.pose.position.x; aux.pos.y = transformed_pose.pose.position.y; aux.pos.z = transformed_pose.pose.position.z;
