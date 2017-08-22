@@ -93,7 +93,7 @@ void CeabotMazeAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& ms
   this->fallen_state = msg->data;
   if (msg->data == 0 or msg->data == 1) {
     this->darwin_state = FALLEN_DARWIN; //No creo que lo mejor sea saltar directamente, habria que guardarse el estado anterior o algo por el estilo... (idk)
-    std::cout << "Fallen detectado con el fallen state callback" << std::endl;
+    //std::cout << "Fallen detectado con el fallen state callback" << std::endl;
   }
 
   //std::cout << msg->data << std::endl;
@@ -199,20 +199,20 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
-  std::cout << "entro " << "searching_for_qr: " << this->searching_for_qr  << std::endl;
+  //std::cout << "entro " << "searching_for_qr: " << this->searching_for_qr  << std::endl;
   geometry_msgs::PoseStamped transformed_pose;
   geometry_msgs::PoseStamped pose;
   if (msg->tags.size()>0) {
     if (this->searching_for_qr) {
-      std::cout << "entro2" << std::endl;
+      //std::cout << "entro2" << std::endl;
       int zone_to_scan = actual_zone_to_scan();
       std::vector<qr_info> vec_aux;
       for (int i = 0; i < msg->tags.size(); ++i) {
         bool ready_to_transform = false;
         fill_PoseStamped(i, msg, pose);
-        std::cout << msg->tags[i].header.frame_id << std::endl;
+        //std::cout << msg->tags[i].header.frame_id << std::endl;
         ready_to_transform = listener.waitForTransform("darwin/base_link", msg->tags[i].header.frame_id , ros::Time::now(), ros::Duration(0.2), ros::Duration(0.08333));
-        std::cout << "ready_to_transform??: " << ready_to_transform << std::endl;
+        //std::cout << "ready_to_transform??: " << ready_to_transform << std::endl;
         if (ready_to_transform) {
           listener.transformPose("darwin/base_link", pose, transformed_pose);
           //tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
@@ -224,12 +224,12 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
           aux.pos.x = transformed_pose.pose.position.x; aux.pos.y = transformed_pose.pose.position.y; aux.pos.z = transformed_pose.pose.position.z;
           aux.ori.x = transformed_pose.pose.orientation.x; aux.ori.y = transformed_pose.pose.orientation.y; aux.ori.z = transformed_pose.pose.orientation.z; aux.ori.w = transformed_pose.pose.orientation.w;
 
-          std::cout << std::endl;
-          std::cout << "Rotation angle: " << this->current_pan_angle << std::endl;
-          std::cout << "Tag ID: " << msg->tags[i].tag_id << std::endl;
-          std::cout <<  "Old X pos: " << msg->tags[i].position.x << " Old Y pos: " << msg->tags[i].position.y << " Old Z pos: " <<  msg->tags[i].position.z << std::endl;
-          std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
-          std::cout << std::endl;
+          //std::cout << std::endl;
+          //std::cout << "Rotation angle: " << this->current_pan_angle << std::endl;
+          //std::cout << "Tag ID: " << msg->tags[i].tag_id << std::endl;
+          //std::cout <<  "Old X pos: " << msg->tags[i].position.x << " Old Y pos: " << msg->tags[i].position.y << " Old Z pos: " <<  msg->tags[i].position.z << std::endl;
+          //std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
+          //std::cout << std::endl;
 
           vec_aux.push_back(aux);
         }
@@ -325,7 +325,7 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
         this->current_angle_travelled += PI/4.0;
       }
       if (this->direction == -1 or (aux_pan >= (-PI/2.0 - ERROR) and aux_pan <= (-PI/2.0 + ERROR))) {
-        std::cout << "wait for scan entro" << std::endl;
+        //std::cout << "wait for scan entro" << std::endl;
         this->searching_for_qr = true;
         ros::Duration(1.0).sleep();
       }
@@ -403,12 +403,12 @@ void CeabotMazeAlgNode::check_goal_alpha(double goal) {
 void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
   double diffx = fabs(goalx - this->odom_x);
   double diffy = fabs(goaly - this->odom_y);
-  std::cout << "Diferència X: " << diffx << " Diferència Y: " << diffy << std::endl;
+  //std::cout << "Diferència X: " << diffx << " Diferència Y: " << diffy << std::endl;
   if ((diffx >= -this->config_.ERROR_PERMES and diffx <= this->config_.ERROR_PERMES) and (diffy >= -this->config_.ERROR_PERMES and diffy <= this->config_.ERROR_PERMES)) {
     ROS_INFO("XY goal achieved, soon I'll be moving on!");
     this->walk.stop();
     this->darwin_state = FALLEN_DARWIN; //ANADIR QUE SE HAGA LA TRANSICION DE ESTADOS EN LA INTERRUPCION!
-    std::cout << "Fallen detectado con el check_goal_xy" << std::endl;
+    //std::cout << "Fallen detectado con el check_goal_xy" << std::endl;
   }
   else {
     double tom = saturate_movement(this->config_.p * ((diffx+diffy)/2.0));
@@ -619,7 +619,7 @@ void CeabotMazeAlgNode::search_for_goal_qr (void) {
                     this->next_x_mov = this->qr_information[i][j].pos.x ;
                     this->next_z_mov = this->qr_information[i][j].pos.z;
 
-                    std::cout << this->next_x_mov << " " << this->next_z_mov << std::endl;
+                    //std::cout << this->next_x_mov << " " << this->next_z_mov << std::endl;
                     this->darwin_state = CALCULATE_MOVEMENT;
                 }
             }
@@ -682,8 +682,8 @@ bool CeabotMazeAlgNode::distance_sort (qr_info o, qr_info p) {
 
 void CeabotMazeAlgNode::find_holes(void) {
     std::sort (this->ocupation.begin(), this->ocupation.end(), density_sort);
-    for (int i = 0; i < this->ocupation.size(); ++i)
-    std::cout << this->ocupation [i].first << ' ' << this->ocupation [i].second << std::endl;
+    //for (int i = 0; i < this->ocupation.size(); ++i)
+    //std::cout << this->ocupation [i].first << ' ' << this->ocupation [i].second << std::endl;
     //ocupation is a vector which indicates the sector concerning to the
     //in the first element of the pair and indicates the ocupation coeficient (equal for
     //each obstacle in a sector) in the second element of the pair
@@ -794,9 +794,9 @@ void CeabotMazeAlgNode::get_immediate_obs (int m, int i, qr_info &obs1, qr_info 
   else j = i - 1;
 
   while (l >= 0 and not found) {
-    std::cout << "l : " << l << std::endl;
+    //std::cout << "l : " << l << std::endl;
     while (j >= 0 and not found) {
-      std::cout << "j : " << j << std::endl;
+      //std::cout << "j : " << j << std::endl;
       if (qr_information[l][j].qr_tag != qr_information[m][i].qr_tag) {
         obs1 = qr_information[l][j];
         found = true;
@@ -814,9 +814,9 @@ void CeabotMazeAlgNode::get_immediate_obs (int m, int i, qr_info &obs1, qr_info 
   else j = i + 1;
 
   while (r < qr_information.size() and not found) {
-    std::cout << "r : " << r << std::endl;
+    //std::cout << "r : " << r << std::endl;
     while (j < qr_information[r].size() and not found) {
-      std::cout << "j : " << j << std::endl;
+      //std::cout << "j : " << j << std::endl;
       if (qr_information[r][j].qr_tag != qr_information[m][i].qr_tag) {
         obs2 = qr_information[r][j];
         found = true;
@@ -826,11 +826,11 @@ void CeabotMazeAlgNode::get_immediate_obs (int m, int i, qr_info &obs1, qr_info 
     ++r;
     j = 0;
   }
-  std::cout << std::endl;
-  std::cout << "QR found:" << std::endl;
-  std::cout << "left QR: " << obs1.qr_tag << std::endl;
-  std::cout <<  " middle QR: " << this->qr_information[m][i].qr_tag <<  std::endl;
-  std::cout << " right QR: " << obs2.qr_tag << std::endl;
+  //std::cout << std::endl;
+  //std::cout << "QR found:" << std::endl;
+  //std::cout << "left QR: " << obs1.qr_tag << std::endl;
+  //std::cout <<  " middle QR: " << this->qr_information[m][i].qr_tag <<  std::endl;
+  //std::cout << " right QR: " << obs2.qr_tag << std::endl;
   std::cout << std::endl;
 }
 
