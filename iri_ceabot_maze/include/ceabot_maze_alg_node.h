@@ -85,6 +85,10 @@ struct orientation {
   double x; double y; double z; double w;
 };
 
+struct DDPOINT {
+  double x; double z;
+};
+
 struct qr_info {
   geometry_msgs::PoseStamped pose;
   std::string qr_tag; position pos; orientation ori;
@@ -176,6 +180,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
     std::vector<std::pair <int, double> > ocupation;
     std::vector<std::vector <qr_info> > qr_information;
+    std::vector<std::pair <DDPOINT, double> > holes_magn;
 
     Config config_;
     CWalkModule walk;
@@ -298,7 +303,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void find_holes(void);
 
-      bool is_hole(qr_info* obs1, qr_info* obs2);
+      double is_hole(qr_info* obs1, qr_info* obs2);
 
       bool is_wall(qr_info* obs1);
 
