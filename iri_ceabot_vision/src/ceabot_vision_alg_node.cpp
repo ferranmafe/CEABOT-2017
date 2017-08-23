@@ -219,9 +219,15 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
   {
     std::cout << obtain_angle_against_darwins_head(msg->tags[0].position.x, msg->tags[0].position.z) << std::endl;
     if (this->darwin_state == IDLE and this->event_start and this->QR_identifier == "None") {
+      if (msg->tags.size() == 0) {
 
-
-      if (msg->tags.size() == 1) {
+      }
+      else {
+        for (int i = 0; i < msg->tags.size(); ++i) {
+          if
+        }
+      }
+      else if (msg->tags.size() == 1) {
         this->darwin_state = MOVEMENT;
         this->QR_identifier = msg->tags[0].tag_id; //Se puede añadir en un and que la posicion sea distinta a todos los leidos anteriormente
         double aux_old_goal_bno = this->bno055_measurement + obtain_angle_against_darwins_head(msg->tags[0].position.x, msg->tags[0].position.z);
@@ -230,8 +236,6 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
         this->old_goal_bno = aux_old_goal_bno;
       }
       else {
-          /*std::cout << "----------------------------" << std::endl;
-          std::cout << "More than 1 QR tags detected" << std::endl;*/
           std::string aux_tag_id = msg->tags[0].tag_id;
           double x_tag_aux = msg->tags[0].position.x;
           double z_tag_aux = msg->tags[0].position.z;
@@ -246,38 +250,24 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
 
           double qr_difference_respect_goal = goal_calculated_new_qr - goal_calculated_old_qr;
           if (qr_difference_respect_goal < 0.0) qr_difference_respect_goal *= -1;
-          /*std::cout << "TAG ID: " << aux_tag_id << std::endl;
-          std::cout << "Angle against darwin: " << this->old_turn_angle << std::endl;
-          std::cout << "Actual position for the QR: " << (this->bno055_measurement + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux)) << std::endl; // + obtain_angle_against_darwins_head(x_tag_aux, z_tag_aux)) << std::endl;
-          std::cout << "Calculo ideal del QR: " << (this->old_goal_bno + this->old_turn_angle) << std::endl;
-          std::cout << -PI/2.0 << std::endl;
-          std::cout << "X TAG: " << x_tag_aux << std::endl;
-          std::cout << "Z TAG: " << z_tag_aux << std::endl;
-          std::cout << "QR DIFFERENCE RESPECT GOAL: " << qr_difference_respect_goal << std::endl;
-          std::cout << std::endl;
-          std::cout << std::endl;*/
+          else if (qr_difference_respect_goal > PI) qr_difference_respect_goal = 2 * PI - qr_difference_respect_goal;
+          else if (qr_difference_respect_goal < -PI) qr_difference_respect_goal += 2 * PI;
 
           for (int i = 1; i < msg->tags.size(); ++i) {
               goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(msg->tags[i].position.x, msg->tags[i].position.z);
+
               if (goal_calculated_new_qr >= 2.0 * PI) goal_calculated_new_qr -= 2.0 * PI;
               else if (goal_calculated_new_qr < 0.0) goal_calculated_new_qr += 2.0 * PI;
+
               double new_qr_difference_to_test = goal_calculated_new_qr - goal_calculated_old_qr;
               if (new_qr_difference_to_test < 0.0) new_qr_difference_to_tests *= -1;
-
-              /*std::cout << "TAG ID: " << msg->tags[i].tag_id << std::endl;
-              std::cout << "NEW QR DIFFERENCE RESPECT GOAL: " << new_qr_difference_to_test << std::endl;*/
 
               if (new_qr_difference_to_test < qr_difference_respect_goal) {
                   qr_difference_respect_goal = new_qr_difference_to_test;
                   aux_tag_id = msg->tags[i].tag_id;
                   x_tag_aux = msg->tags[i].position.x;
                   z_tag_aux = msg->tags[i].position.z;
-                  /*std::cout << "TAG ID: " << aux_tag_id << std::endl;
-                  std::cout << "X TAG: " << x_tag_aux << std::endl;
-                  std::cout << "Z TAG: " << z_tag_aux << std::endl;
-                  std::cout << "QR DIFFERENCE RESPECT GOAL: " << qr_difference_respect_goal << std::endl;
-                  std::cout << std::endl;
-                  std::cout << std::endl;*/
+
               }
           }
           this->darwin_state = MOVEMENT;
@@ -286,14 +276,8 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
           if (aux_old_goal_bno >= 2.0 * PI) aux_old_goal_bno -= 2.0 * PI;
           else if (aux_old_goal_bno < 0.0) aux_old_goal_bno += 2.0 * PI;
           this->old_goal_bno = aux_old_goal_bno;
-          //std::cout << "-----------------" << std::endl;
       }
-
     }
-    //this->pan_angle=this->current_pan_angle+atan2(msg->tags[0].position.x,msg->tags[0].position.z);
-    //this->tilt_angle=this->current_tilt_angle+atan2(msg->tags[0].position.y,msg->tags[0].position.z);
-    //ROS_INFO("Next target pan angle: %f (%f,%f)",this->pan_angle,this->current_pan_angle,atan2(msg->tags[0].position.x,msg->tags[0].position.z));
-    //ROS_INFO("Next target tilt angle: %f (%f,%f)",this->tilt_angle,this->current_tilt_angle,atan2(msg->tags[0].position.y,msg->tags[0].position.z));
   }
   this->qr_pose_mutex_exit();
 }

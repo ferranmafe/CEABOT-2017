@@ -40,6 +40,7 @@
 #include <sensor_msgs/JointState.h>
 #include <humanoid_common_msgs/tag_pose_array.h>
 #include <string>
+#include <set>
 #include <math.h>
 #include <tf/tf.h>
 // [service client headers]
@@ -112,6 +113,9 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
 
     //tag_id obtained while decoding
     std::string QR_identifier;
+
+
+    std::set<std::string> qr_seen;
 
     //Flag which allows Darwin to wait the first 5 sec of the event
     bool event_start;

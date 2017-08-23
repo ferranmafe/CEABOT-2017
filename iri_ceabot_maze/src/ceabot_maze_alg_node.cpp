@@ -309,6 +309,7 @@ void CeabotMazeAlgNode::scan_maze(void) {
       this->current_angle_travelled = 0.0;
       this->tracking_module.start_tracking(goal_x, goal_y);
       this->search_started = true;
+      ROS_INFO ( "WOLOLOOOO");
     }
     else {
       this->tracking_module.update_target(goal_x, goal_y);
@@ -320,6 +321,7 @@ void CeabotMazeAlgNode::scan_maze(void) {
 
 void CeabotMazeAlgNode::wait_for_scan(void) {
   double aux_pan = this->current_pan_angle;
+  std::cout << this->current_pan_angle << std::endl;
   if (this->search_started) {
     if (aux_pan >= (this->goal_x - ERROR) and aux_pan <= (this->goal_x + ERROR)) { //Sub-goal achieved
       ROS_INFO("Ceabot Maze : Goal achieved, moving on for the next one!");
@@ -340,6 +342,7 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
       this->darwin_state = SCAN_MAZE;
     }
     if (this->current_angle_travelled == DegtoRad(360.0)) {
+      this->tracking_module.stop_tracking();
       this->search_started = false;
       this->darwin_state = SEARCH_FOR_GOAL_QR;
       this->direction = 0;
@@ -360,7 +363,8 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
 }
 
 void CeabotMazeAlgNode::calculate_next_move(void) {
-    this->nm_x = sqrt(pow(this->next_x_mov, 2) + pow(this->next_z_mov, 2));
+    std::cout << "voy a calcular el siguiente movimiento con: " << this->next_x_mov << ' ' << this->next_z_mov << std::endl;
+    this->nm_x = 0.5*sqrt(pow(this->next_x_mov, 2) + pow(this->next_z_mov, 2));
     this->nm_alpha =  (atan2(this->next_x_mov, this->next_z_mov));
 
     this->darwin_state = MOVEMENT_ALPHA;
@@ -411,24 +415,24 @@ void CeabotMazeAlgNode::check_goal_alpha(double goal) {
 void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
   double diffx = fabs(goalx - this->odom_x);
   double diffy = fabs(goaly - this->odom_y);
-  //std::cout << "Diferència X: " << diffx << " Diferència Y: " << diffy << std::endl;
+  std::cout << "Diferència X: " << diffx << " Diferència Y: " << diffy << std::endl;
   if ((diffx >= -this->config_.ERROR_PERMES and diffx <= this->config_.ERROR_PERMES) and (diffy >= -this->config_.ERROR_PERMES and diffy <= this->config_.ERROR_PERMES)) {
     ROS_INFO("XY goal achieved, soon I'll be moving on!");
     this->walk.stop();
-    this->darwin_state = SCAN_MAZE; //ANADIR QUE SE HAGA LA TRANSICION DE ESTADOS EN LA INTERRUPCION!
+    this->darwin_state = IDLE; //ANADIR QUE SE HAGA LA TRANSICION DE ESTADOS EN LA INTERRUPCION!
   }
   else {
     double tom = saturate_movement(this->config_.p * ((diffx+diffy)/2.0));
     this->walk.set_steps_size(tom, 0.0, 0.0);
   }
-
-    this->old_darwin_state = CHECK_GOAL_XY;
 }
 
 void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion los cambios de estado que son unicos, o sea, que son transiciones simples...
   switch(this->darwin_state) {
     case IDLE:
       ROS_INFO("Darwin Ceabot Vision : state IDLE");
+      this->search_started = false;
+      this->darwin_state = SCAN_MAZE; //Vuelta a empezar...
       break;
 
     case SCAN_MAZE:
@@ -710,7 +714,7 @@ void CeabotMazeAlgNode::find_holes(void) {
             //Now l_obs and r_obs are fullfilled with the desired obstacles
             //So we can check if there are some wholes between them
             distance=is_hole(&m_obs, &l_obs);
-            if (l_obs.qr_tag != "NULL" and distance){
+            if (l_obs.qr_tag != "NULL" and (distance >= 0.5 - this->config_.ERROR_PERMES)){
               calculate_point_to_move(&m_obs, &l_obs);
 
               DDPOINT p;
@@ -719,8 +723,8 @@ void CeabotMazeAlgNode::find_holes(void) {
               holes_magn.push_back(ho);
             }
 
-            distance=is_hole(&m_obs, &l_obs);
-            if (r_obs.qr_tag != "NULL" and distance) {
+            distance=is_hole(&m_obs, &r_obs);
+            if (r_obs.qr_tag != "NULL" and (distance >= 0.5 - this->config_.ERROR_PERMES)) {
               calculate_point_to_move(&m_obs, &r_obs);
 
               DDPOINT p;
@@ -762,15 +766,20 @@ void CeabotMazeAlgNode::find_holes(void) {
     std::cout << "HOLES_MGN: " << std::endl;
     bool realhole = false;
     std::pair <DDPOINT, double> best;
-    best.second = 0.0; best.first.x = -1; best.first.z = -1;
+    best.second = 0.0; best.first.x = 0.0; best.first.z = 0.0;
     for (int i = 0; i < holes_magn.size(); ++i) {
+      double xh, zh, k, j;
+      xh = holes_magn [i].first.x;
+      zh = holes_magn [i].first.z;
+      k = sqrt(pow(xh,2)+pow(zh,2));
+      j = sqrt(pow(best.first.x,2)+pow(best.first.z,2));
       if (holes_magn [i].second > best.second) {
         if (not realhole) realhole = true;
         best.first.x = holes_magn [i].first.x;
         best.first.z = holes_magn [i].first.z;
         best.second = holes_magn [i].second;
       }
-      else if (holes_magn [i].second == -1.0 and not realhole) {
+      else if (holes_magn [i].second == -1.0 and k > j and not realhole) { //Funciona para la primera parte (?)
         best.first.x = holes_magn [i].first.x;
         best.first.z = holes_magn [i].first.z;
         best.second = holes_magn [i].second;
@@ -782,6 +791,7 @@ void CeabotMazeAlgNode::find_holes(void) {
     this->next_x_mov = best.first.x;
     this->next_z_mov = best.first.z;
 
+    std::cout << "Me voy a mover a : " << "x: " << this->next_x_mov << " z:" << this->next_z_mov << std::endl;
     this->darwin_state = CALCULATE_MOVEMENT;
 
 }
@@ -794,29 +804,32 @@ bool CeabotMazeAlgNode::is_wall(qr_info* obs1) {
 
 
 double CeabotMazeAlgNode::is_hole(qr_info* obs1, qr_info* obs2) {
-    double distance = sqrt(pow(obs1->pos.x - obs2->pos.x, 2) + pow(obs1->pos.z - obs2->pos.z, 2));
-    bool rtt = false;
-    geometry_msgs::PoseStamped transformed_pose;
-    geometry_msgs::PoseStamped pose;
-    if (is_wall(obs1)) {
-      pose = obs2->pose;
-      rtt = listener.waitForTransform(obs1->pose.header.frame_id, obs2->pose.header.frame_id , ros::Time::now(), ros::Duration(0.2), ros::Duration(0.08333));
-      if (rtt) listener.transformPose(obs1->pose.header.frame_id, pose, transformed_pose);
-      std::cout << "distance: " << distance << " x: " << transformed_pose.pose.position.x << std::endl;
-      distance = sqrt(pow(distance, 2) - pow(transformed_pose.pose.position.x, 2));
-    }
-    else if (is_wall(obs2)) {
-      pose = obs1->pose;
-      rtt = listener.waitForTransform(obs2->pose.header.frame_id, obs1->pose.header.frame_id , ros::Time::now(), ros::Duration(0.2), ros::Duration(0.08333));
-      if (rtt) listener.transformPose(obs2->pose.header.frame_id, pose, transformed_pose);
-      std::cout << "distance: " << distance << " x: " << transformed_pose.pose.position.x << std::endl;
-      distance = sqrt(pow(distance, 2) - pow(transformed_pose.pose.position.x, 2));
-    }
-    std::cout << obs1->qr_tag << ' ' << obs2->qr_tag << std::endl;
-    std::cout << "La distancia de obstaculo a obstaculo es: " << rtt << ' ' << distance << std::endl;
+  if (obs1 != NULL and obs2 != NULL) {
+      double distance = sqrt(pow(obs1->pos.x - obs2->pos.x, 2) + pow(obs1->pos.z - obs2->pos.z, 2));
+      bool rtt = false;
+      geometry_msgs::PoseStamped transformed_pose;
+      geometry_msgs::PoseStamped pose;
+      if (is_wall(obs1)) {
+        pose = obs2->pose;
+        rtt = listener.waitForTransform(obs1->pose.header.frame_id, obs2->pose.header.frame_id , ros::Time::now(), ros::Duration(0.2), ros::Duration(0.08333));
+        if (rtt) listener.transformPose(obs1->pose.header.frame_id, pose, transformed_pose);
+        std::cout << "distance: " << distance << " x: " << transformed_pose.pose.position.x << std::endl;
+        distance = sqrt(pow(distance, 2) - pow(transformed_pose.pose.position.x, 2));
+      }
+      else if (is_wall(obs2)) {
+        pose = obs1->pose;
+        rtt = listener.waitForTransform(obs2->pose.header.frame_id, obs1->pose.header.frame_id , ros::Time::now(), ros::Duration(0.2), ros::Duration(0.08333));
+        if (rtt) listener.transformPose(obs2->pose.header.frame_id, pose, transformed_pose);
+        std::cout << "distance: " << distance << " x: " << transformed_pose.pose.position.x << std::endl;
+        distance = sqrt(pow(distance, 2) - pow(transformed_pose.pose.position.x, 2));
+      }
+      std::cout << obs1->qr_tag << ' ' << obs2->qr_tag << std::endl;
+      std::cout << "La distancia de obstaculo a obstaculo es: " << rtt << ' ' << distance << std::endl;
+      std::cout << distance << " la condicion se evalua a :" << !(distance >= 0.5 - this->config_.ERROR_PERMES) << std::endl;
 
-    if (!(distance >= 0.5 - this->config_.ERROR_PERMES)) return 0.0;
-    return distance;
+      return distance;
+    }
+    else return -1.0; //Es OBJ y NULL O VICEVERSA
 }
 
 void CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2) {
@@ -824,24 +837,26 @@ void CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2) {
         std::cout << "------------" << std::endl;
         std::cout << obs1->qr_tag << ' ' << obs2->qr_tag << std::endl;
         std::cout << "------------" << std::endl;
-        this->next_x_mov = (obs1->pos.x + obs2->pos.x) / 2.0;
-        this->next_z_mov = (obs1->pos.z + obs2->pos.z) / 2.0;
+        this->next_x_mov = ((obs1->pos.x + obs2->pos.x)/2.0);
+        this->next_z_mov = ((obs1->pos.z + obs2->pos.z)/2.0);
+
     }
     else if (obs1 == NULL) {
       std::cout << "------------" << std::endl;
       std::cout << "------------ " << obs2->qr_tag << std::endl;
       std::cout << "------------" << std::endl;
-        this->next_x_mov = obs2->pos.x / 2.0;
-        this->next_z_mov = obs2->pos.z / 2.0;
+      this->next_x_mov = obs2->pos.x;
+      this->next_z_mov = obs2->pos.z;
     }
     else if (obs2 == NULL) {
       std::cout << "------------" << std::endl;
       std::cout << obs1->qr_tag << "------------" << std::endl;
       std::cout << "------------" << std::endl;
-        this->next_x_mov = obs1->pos.x / 2.0;
-        this->next_z_mov = obs1->pos.z / 2.0;
+      this->next_x_mov = obs1->pos.x;
+      this->next_z_mov = obs1->pos.z;
     }
     std::cout << this->next_x_mov << " " << this->next_z_mov << std::endl;
+    std::cout << "------------------" << std::endl;
 
 }
 
