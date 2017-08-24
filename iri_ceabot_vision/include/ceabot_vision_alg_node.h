@@ -58,6 +58,10 @@
                CHECK_GOAL,
                WAIT_STOP_WALKING} darwin_states;
 
+struct qr_info {
+    std::string tag_id; double x; double z;
+};
+
 class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVisionAlgorithm>
 {
   private:
@@ -114,6 +118,7 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
     //tag_id obtained while decoding
     std::string QR_identifier;
 
+    std::vector<qr_info> qr_to_process;
 
     std::set<std::string> qr_seen;
 
@@ -274,7 +279,20 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
        */
        double saturate(double alpha);
 
+
        double obtain_angle_against_darwins_head(double x, double z);
+
+
+       void normalize_angle(double &old_angle);
+
+
+       bool qr_seen_before(std::string qr_tag);
+
+
+       void obtain_absolute_value(double &angle);
+
+
+       qr_info choose_the_correct_qr(void);
 };
 
 #endif
