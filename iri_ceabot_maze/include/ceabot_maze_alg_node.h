@@ -33,7 +33,7 @@
 #include <humanoid_modules/action_module.h>
 
 #define PI 3.1415926535
-#define ERROR 0.087266462
+#define ERROR 0.035
 
 // [publisher subscriber headers]
 #include <std_msgs/Int8.h>
@@ -74,7 +74,10 @@
                CHECK_GOAL_ALPHA,
                CHECK_GOAL_XY,
                FALLEN_DARWIN,
-               IS_DARWIN_STANDING
+               IS_DARWIN_STANDING,
+               CHECK_NORTH,
+               SPIN,
+               STOP_SPINNING
                } darwin_states;
 
 struct position {
@@ -146,6 +149,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     */
     bool event_start;
     darwin_states darwin_state; //Actual
+    darwin_states state_stn;
     bool half_maze_achieved;
 
     bool search_started;
@@ -313,6 +317,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       void get_immediate_obs (int m, int i, qr_info& obs1, qr_info &obs2);
 
       void fill_PoseStamped (int i, const humanoid_common_msgs::tag_pose_array::ConstPtr &in, geometry_msgs::PoseStamped &out);
+
+      void straight_to_north ();
 
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
     // [diagnostic functions]

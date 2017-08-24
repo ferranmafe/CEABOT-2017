@@ -10,6 +10,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   this->event_start = true;
 
   this->darwin_state = SCAN_MAZE;
+  this->state_stn = SPIN;
   this->half_maze_achieved = false;
   this->first_bno_lecture = true;
   this->half_maze_achieved = false;
@@ -419,7 +420,7 @@ void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
   if ((diffx >= -this->config_.ERROR_PERMES and diffx <= this->config_.ERROR_PERMES) and (diffy >= -this->config_.ERROR_PERMES and diffy <= this->config_.ERROR_PERMES)) {
     ROS_INFO("XY goal achieved, soon I'll be moving on!");
     this->walk.stop();
-    this->darwin_state = IDLE; //ANADIR QUE SE HAGA LA TRANSICION DE ESTADOS EN LA INTERRUPCION!
+    this->darwin_state = IDLE;
   }
   else {
     double tom = saturate_movement(this->config_.p * ((diffx+diffy)/2.0));
@@ -430,9 +431,8 @@ void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
 void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion los cambios de estado que son unicos, o sea, que son transiciones simples...
   switch(this->darwin_state) {
     case IDLE:
-      ROS_INFO("Darwin Ceabot Vision : state IDLE");
-      this->search_started = false;
-      this->darwin_state = SCAN_MAZE; //Vuelta a empezar...
+      ROS_INFO("Darwin Ceabot Maze : state IDLE");
+      straight_to_north();
       break;
 
     case SCAN_MAZE:
@@ -699,7 +699,7 @@ void CeabotMazeAlgNode::find_holes(void) {
 
     std::pair <int, double> min_density; min_density.second = 1.0;
     int i = 0;
-
+    std::vector<std::pair <DDPOINT, double> > holes_aux;
     while(i < this->ocupation.size()) {
         if (ocupation [i].second < min_density.second) {min_density = ocupation [i];}
         int sector = this->ocupation [i].first;
@@ -720,7 +720,7 @@ void CeabotMazeAlgNode::find_holes(void) {
               DDPOINT p;
               p.x = this->next_x_mov; p.z = this->next_z_mov;
               ho.first = p; ho.second = distance;
-              holes_magn.push_back(ho);
+              holes_aux.push_back(ho);
             }
 
             distance=is_hole(&m_obs, &r_obs);
@@ -730,7 +730,7 @@ void CeabotMazeAlgNode::find_holes(void) {
               DDPOINT p;
               p.x = this->next_x_mov; p.z = this->next_z_mov;
               ho.first = p; ho.second = distance;
-              holes_magn.push_back(ho);
+              holes_aux.push_back(ho);
             }
 
             if (l_obs.qr_tag == "NULL" or r_obs.qr_tag == "NULL") {
@@ -741,7 +741,7 @@ void CeabotMazeAlgNode::find_holes(void) {
                 p.x = this->next_x_mov; p.z = this->next_z_mov;
                 ho.first = p; ho.second = -1.0;
 
-                holes_magn.push_back(ho);
+                holes_aux.push_back(ho);
               }
               if (r_obs.qr_tag == "NULL") {
                 calculate_point_to_move(&m_obs, NULL);
@@ -750,7 +750,7 @@ void CeabotMazeAlgNode::find_holes(void) {
                 p.x = this->next_x_mov; p.z = this->next_z_mov;
                 ho.first = p; ho.second = -1.0;
 
-                holes_magn.push_back(ho);
+                holes_aux.push_back(ho);
               }
               //That means there's no hole, nor left or right
               //So we move towards to the less occupied sector (at the end of both loops)
@@ -763,6 +763,7 @@ void CeabotMazeAlgNode::find_holes(void) {
         ++i;
     }
 
+    holes_magn = holes_aux;
     std::cout << "HOLES_MGN: " << std::endl;
     bool realhole = false;
     std::pair <DDPOINT, double> best;
@@ -946,6 +947,31 @@ void CeabotMazeAlgNode::fill_PoseStamped (int i, const humanoid_common_msgs::tag
 
   out.pose.orientation = in->tags [i].orientation;
   out.pose.position = in->tags [i].position;
+}
+
+void CeabotMazeAlgNode::straight_to_north () {
+  double diff = north_of_the_maze - bno055_measurement;
+  switch (this->state_stn) {
+    case CHECK_NORTH :
+      if (diff >= -ERROR and diff >= +ERROR) {
+        this->state_stn = STOP_SPINNING;
+        this->walk.stop();
+        ROS_INFO("Now I'm straight to the North!");
+      }
+      else this->walk.set_steps_size(0.0, 0.0, saturate_alpha(diff) * this->config_.p);
+      break;
+    case SPIN :
+      this->walk.set_steps_size(0.0, 0.0, this->config_.p * saturate_alpha(diff));
+      this->state_stn = CHECK_NORTH;
+      break;
+    case STOP_SPINNING :
+      if (this->walk.is_finished()) {
+        this->search_started = false;
+        this->darwin_state = SCAN_MAZE;
+      }
+      else this->walk.stop();
+      break;
+  }
 }
 
 /* main function */
