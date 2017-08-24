@@ -33,7 +33,7 @@
 #include <humanoid_modules/action_module.h>
 
 #define PI 3.1415926535
-#define ERROR 0.035
+#define ERROR 0.085
 
 // [publisher subscriber headers]
 #include <std_msgs/Int8.h>
@@ -186,6 +186,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     std::vector<std::pair <int, double> > ocupation;
     std::vector<std::vector <qr_info> > qr_information;
     std::vector<std::pair <DDPOINT, double> > holes_magn;
+    std::vector < std::vector<std::pair <DDPOINT, double> > > holes_bysektor;
 
     Config config_;
     CWalkModule walk;

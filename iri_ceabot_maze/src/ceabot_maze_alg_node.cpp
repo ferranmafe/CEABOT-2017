@@ -432,7 +432,8 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
   switch(this->darwin_state) {
     case IDLE:
       ROS_INFO("Darwin Ceabot Maze : state IDLE");
-      straight_to_north();
+      //if (this->walk.is_finished()) straight_to_north();
+      this->darwin_state = SCAN_MAZE;
       break;
 
     case SCAN_MAZE:
@@ -488,7 +489,7 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
 
     case FALLEN_DARWIN:
       ROS_INFO("Checking Darwin integrity...");
-      if (!this->walk.is_finished()) this->walk.stop();
+      /*if (!this->walk.is_finished()) this->walk.stop();
       if (this->action.is_finished()) {
         if (this->fallen_state == 0) {
           this->action.execute(10);
@@ -499,12 +500,12 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
       }
 
       this->darwin_state = IS_DARWIN_STANDING;
-
+      */
       break;
 
     case IS_DARWIN_STANDING:
       ROS_INFO("Waiting for Darwin to be upwards...");
-      if (this->action.is_finished()) {
+      /*if (this->action.is_finished()) {
         this->darwin_state = MOVEMENT_ALPHA;
         if (!this->half_maze_achieved){
           this->nm_alpha = this->north_of_the_maze - this->bno055_measurement;
@@ -517,7 +518,7 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
           this->nm_alpha = south_of_the_maze - this->bno055_measurement;
         }
         this->nm_x = 0.0;
-      }
+      }*/
       break;
   }
 
@@ -699,11 +700,12 @@ void CeabotMazeAlgNode::find_holes(void) {
 
     std::pair <int, double> min_density; min_density.second = 1.0;
     int i = 0;
-    std::vector<std::pair <DDPOINT, double> > holes_aux;
-    while(i < this->ocupation.size()) {
-        if (ocupation [i].second < min_density.second) {min_density = ocupation [i];}
-        int sector = this->ocupation [i].first;
+    std::vector < std::vector<std::pair <DDPOINT, double> > > holes_bysektor_aux;
+    while(i < 5) {
         int k = 0;
+        int sector = i;
+        std::vector<std::pair <DDPOINT, double> > holes_aux;
+
         while (k < this->qr_information [sector].size()) {
           qr_info m_obs, l_obs, r_obs;
           m_obs = this->qr_information [sector][k];
@@ -711,6 +713,7 @@ void CeabotMazeAlgNode::find_holes(void) {
           if (!is_wall(&m_obs)) {
             double distance;
             get_immediate_obs (sector, k, l_obs, r_obs);
+
             //Now l_obs and r_obs are fullfilled with the desired obstacles
             //So we can check if there are some wholes between them
             distance=is_hole(&m_obs, &l_obs);
@@ -760,11 +763,43 @@ void CeabotMazeAlgNode::find_holes(void) {
           }
           ++k;
         }
+        holes_bysektor_aux.push_back(holes_aux);
         ++i;
     }
 
-    holes_magn = holes_aux;
-    std::cout << "HOLES_MGN: " << std::endl;
+    this->holes_bysektor = holes_bysektor_aux;
+
+    int hole_sector = 0;
+    std::pair <DDPOINT, double> best;
+    best.second = -1.0; best.first.x = 0.0; best.first.z = -0.0;
+    for (int i = 0; i < this->holes_bysektor.size(); ++i) {
+      std::cout << "Sektor: " << i << std::endl;
+      for (int j = 0; j < this->holes_bysektor [i].size(); ++j) {
+        double d = this->holes_bysektor [i] [j].second;
+        if ((i == 4 or i == 0) and (hole_sector > 3 or hole_sector < 1) and d >= best.second) {
+          hole_sector = i;
+          best.second = d;
+          best.first = this->holes_bysektor [i] [j].first;
+        }
+        else if ((i == 3 or i == 1) and (hole_sector != 2) and d >= best.second) {
+          hole_sector = i;
+          best.second = d;
+          best.first = this->holes_bysektor [i] [j].first;
+        }
+        else if (i == 2 and d >= best.second) {
+          hole_sector = i;
+          best.second = d;
+          best.first = this->holes_bysektor [i] [j].first;
+        }
+        std::cout << this->holes_bysektor [i] [j].first.x << ' ' << this->holes_bysektor [i] [j].first.z << ' ' << this->holes_bysektor [i] [j].second << std::endl;
+      }
+    }
+
+    this->next_x_mov = best.first.x;
+    this->next_z_mov = best.first.z;
+    this->darwin_state = CALCULATE_MOVEMENT;
+
+    /*std::cout << "HOLES_MGN: " << std::endl;
     bool realhole = false;
     std::pair <DDPOINT, double> best;
     best.second = 0.0; best.first.x = 0.0; best.first.z = 0.0;
@@ -792,8 +827,8 @@ void CeabotMazeAlgNode::find_holes(void) {
     this->next_x_mov = best.first.x;
     this->next_z_mov = best.first.z;
 
-    std::cout << "Me voy a mover a : " << "x: " << this->next_x_mov << " z:" << this->next_z_mov << std::endl;
-    this->darwin_state = CALCULATE_MOVEMENT;
+    std::cout << "Me voy a mover a : " << "x: " << this->next_x_mov << " z:" << this->next_z_mov << std::endl;*/
+
 
 }
 
@@ -949,19 +984,20 @@ void CeabotMazeAlgNode::fill_PoseStamped (int i, const humanoid_common_msgs::tag
   out.pose.position = in->tags [i].position;
 }
 
-void CeabotMazeAlgNode::straight_to_north () {
+void CeabotMazeAlgNode::straight_to_north () { //Funciona??
   double diff = north_of_the_maze - bno055_measurement;
   switch (this->state_stn) {
     case CHECK_NORTH :
-      if (diff >= -ERROR and diff >= +ERROR) {
+      if (diff >= -ERROR and diff <= +ERROR) {
         this->state_stn = STOP_SPINNING;
         this->walk.stop();
         ROS_INFO("Now I'm straight to the North!");
       }
-      else this->walk.set_steps_size(0.0, 0.0, saturate_alpha(diff) * this->config_.p);
+      else this->walk.set_steps_size(0.0, 0.0, 0.25*saturate_alpha(diff));
       break;
     case SPIN :
-      this->walk.set_steps_size(0.0, 0.0, this->config_.p * saturate_alpha(diff));
+      ROS_INFO("SPIIIIIIIIIIIIIIIIIIIN");
+      this->walk.set_steps_size(0.0, 0.0, 0.25*saturate_alpha(diff));
       this->state_stn = CHECK_NORTH;
       break;
     case STOP_SPINNING :
