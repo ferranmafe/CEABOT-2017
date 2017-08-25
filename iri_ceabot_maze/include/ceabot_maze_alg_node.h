@@ -179,6 +179,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     int    turn_left;
     int    fallen_state;
     int    direction;
+    int way_axis_grow;
     double next_x_mov;
     double next_z_mov;
     tf::TransformListener listener;
