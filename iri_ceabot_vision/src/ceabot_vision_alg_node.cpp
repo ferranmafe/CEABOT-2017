@@ -12,14 +12,14 @@ CeabotVisionAlgNode::CeabotVisionAlgNode(void) :
 
   this->search_started=false;
   this->pan_angle=0.0;
-  this->current_pan_angle=config_.PAN_ANGLE;
-  this->tilt_angle=PI/2;
-  this->current_tilt_angle=config_.TILT_ANGLE;
+  this->tilt_angle=0.0;
   this->turn_angle = 0.0;
   this->QR_identifier = "None";
   this->turn_left = 1;
   this->old_turn_angle = 0.0;
+  this->head_search_started = false;
   this->bno_readed_first_time = false;
+  this->head_state = 0;
   //this->loop_rate_ = 2;//in [Hz]
 
   // [init publishers]
@@ -186,7 +186,7 @@ void CeabotVisionAlgNode::odom_mutex_exit(void)
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void CeabotVisionAlgNode::joint_states_callback(const sensor_msgs::JointState::ConstPtr& msg) {
   unsigned int i;
-
+  std::cout << "I entered to the joint_states_callback()" << std::endl;
   //use appropiate mutex to shared variables if necessary
   //this->alg_.lock();
   this->joint_states_mutex_enter();
@@ -194,12 +194,13 @@ void CeabotVisionAlgNode::joint_states_callback(const sensor_msgs::JointState::C
   for (i = 0; i < msg->name.size() ; ++i){
     if (msg->name[i]=="j_pan"){
       this->current_pan_angle=msg->position[i];
+      std::cout << "Current Pan Angle seen as a msg: " << msg->position[i] << std::endl;
     }
     else if (msg->name[i]=="j_tilt"){
       this->current_tilt_angle=(msg->position[i]);
+            std::cout << "Current Tilt Angle seen as a msg: " << msg->position[i] << std::endl;
     }
   }
-  //ROS_INFO("angle_pan: %f angle_tilt: %f",this->current_pan_angle,this->current_tilt_angle);
   //unlock previously blocked shared variables
   //this->alg_.unlock();
   this->joint_states_mutex_exit();
@@ -247,9 +248,19 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
           std::cout << "FINAL TAG ID: " << next_qr_to_go.tag_id << std::endl;
 
           this->old_goal_bno = aux_old_goal_bno;
+          if (head_search_started) {
+            head_search_started = false;
+            head_state = 0;
+            this->tracking_module.stop_tracking();
+          }
       }
       else {
-
+        std::cout << "NOT QR DETECTED" << std::endl;
+        if (!head_search_started) {
+          head_state = 1;
+          update_pan_and_tilt();
+        }
+        darwin_state = SEARCH_QR;
       }
     }
   this->qr_pose_mutex_exit();
@@ -315,6 +326,7 @@ void CeabotVisionAlgNode::init_headt_module(void) {
 //State Machine. After the start the idea is to iterate between the different states
 //SEARCH_QR -> DECODE_QR -> MOVEMENT -> MOVEMENT_ERROR_COMPROBATION -> SEARCH_QR
 void CeabotVisionAlgNode::state_machine(void) {
+  std::cout << "Current Pan: " << this->current_pan_angle << " Current Tilt: " << this->current_tilt_angle << std::endl;
   switch(this->darwin_state) {
     //Case of no movement and no scanning
     case IDLE: //0 ------------------------------------------------------------------------------------------------------------------------------------
@@ -324,17 +336,32 @@ void CeabotVisionAlgNode::state_machine(void) {
 
       break;
     case SEARCH_QR: //1 -------------------------------------------------------------------------------------------------------------------------------
-      //ROS_INFO("Darwin Ceabot Vision : state SEARCH_QR");
-      this->pan_angle = config_.PAN_ANGLE;
-      this->tilt_angle = config_.TILT_ANGLE;
-      if (!search_started) {
-        //ROS_INFO("HEY, I JUST STARTED SEARCHING!!");
+      if (!head_search_started) {
+        ROS_INFO("HEY, I JUST STARTED SEARCHING!!");
         this->tracking_module.start_tracking(this->pan_angle,this->tilt_angle);
-        this->search_started=true;
+        this->head_search_started=true;
       }
       else this->tracking_module.update_target(this->pan_angle,this->tilt_angle);
-
+      darwin_state = WAIT_SEARCH;
       break;
+
+    case WAIT_SEARCH:
+        ROS_INFO("WAITING SEARCH");
+        std::cout << "-------------------------" << std::endl;
+        std::cout << "Current Pan: " << this->current_pan_angle << " Current Tilt: " << this->current_tilt_angle << std::endl;
+        std::cout << "Pan: " << this->pan_angle << " Tilt: " << this->tilt_angle << std::endl;
+        std::cout << "-------------------------" << std::endl;
+
+        if (this->current_pan_angle >= (this->pan_angle - ERROR) and this->current_pan_angle <= (this->pan_angle + ERROR)) {
+            if (this->current_tilt_angle >= (this->tilt_angle - ERROR) and this->current_tilt_angle <= (this->tilt_angle + ERROR)){
+                ROS_INFO("GOAL ACHIEVED");
+                ++head_state;
+                if (head_state <= 4) update_pan_and_tilt();
+                else head_state = 0;
+                darwin_state = IDLE;
+            }
+        }
+        break;
 
     case MOVEMENT: //2 ----------------------------------------------------------------------------------------------------------------------------------
       //Only enter to this if-condition in the first iteration of the mainNodeThread in
@@ -512,6 +539,35 @@ void CeabotVisionAlgNode::obtain_absolute_value (double &angle){
   if (angle < 0.0) angle *= -1;
   else if (angle > PI) angle = 2 * PI - angle;
   else if (angle < -PI) angle += 2 * PI;
+}
+
+void CeabotVisionAlgNode::update_pan_and_tilt(void) {
+  switch (head_state) {
+    case 0:
+        this->pan_angle = 0.0;
+        this->tilt_angle = PI / 4;
+        break;
+
+    case 1:
+        this->pan_angle = 0.0;
+        this->tilt_angle = PI / 2;
+        break;
+
+    case 2:
+        this->pan_angle = 0.0;
+        this->tilt_angle = 0.0;
+        break;
+
+    case 3:
+        this->pan_angle = PI / 8;
+        this->tilt_angle = PI / 4;
+        break;
+
+    case 4:
+        this->pan_angle = - PI / 8;
+        this->tilt_angle = PI / 4;
+        break;
+  }
 }
 
 /* main function */

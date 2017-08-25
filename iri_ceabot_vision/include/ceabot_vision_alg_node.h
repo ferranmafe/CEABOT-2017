@@ -32,6 +32,7 @@
 #include <humanoid_modules/head_tracking_module.h>
 #define PI 3.1415926535
 #define GRADIENT 0.159154943
+#define ERROR 0.085
 
 // [publisher subscriber headers]
 #include <dynamic_reconfigure/Config.h>
@@ -54,6 +55,7 @@
 
  typedef enum {IDLE,
                SEARCH_QR,
+               WAIT_SEARCH,
                MOVEMENT,
                CHECK_GOAL,
                WAIT_STOP_WALKING} darwin_states;
@@ -130,6 +132,17 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
 
     //Parameters of the next move of Darwin (direction and angle)
     int turn_left; //If false, turn right
+
+    bool head_search_started;
+
+    /*
+    0-> pan = 0 // tilt = 0
+    1-> pan = 0 // tilt = PI / 4
+    2-> pan = 0 // tilt = - PI / 4
+    3 -> pan = PI / 8 // tilt = 0
+    4 -> pan = - PI / 8 // tilt = 0
+    */
+    int head_state;
 
     //Goal to achieve
     double goal;
@@ -293,6 +306,8 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
 
 
        qr_info choose_the_correct_qr(void);
+
+       void update_pan_and_tilt(void);
 };
 
 #endif
