@@ -43,7 +43,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
 
   this->qr_pose_subscriber_ = this->public_node_handle_.subscribe("qr_pose", 1, &CeabotMazeAlgNode::qr_pose_callback, this);
   pthread_mutex_init(&this->qr_pose_mutex_,NULL);
-  // [init services]
+  // [init services]+ way_axis_grow*0.2
 
   // [init clients]
 
@@ -99,10 +99,10 @@ void CeabotMazeAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& ms
   //this->alg_.lock();
   //this->fallen_state_mutex_enter();
   this->fallen_state = msg->data;
-  if (msg->data == 0 or msg->data == 1) {
-    this->darwin_state = FALLEN_DARWIN; //No creo que lo mejor sea saltar directamente, habria que guardarse el estado anterior o algo por el estilo... (idk)
+  /*if (msg->data == 0 or msg->data == 1) {
+    this->darwin_state = FALLEN_DARWIN; *///No creo que lo mejor sea saltar directamente, habria que guardarse el estado anterior o algo por el estilo... (idk)
     //std::cout << "Fallen detectado con el fallen state callback" << std::endl;
-  }
+  //}
 
   //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
@@ -152,14 +152,14 @@ void CeabotMazeAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg) {
   //use appropiate mutex to shared variables if necessary
   //this->alg_.lock();
   //this->odom_mutex_enter();
-  if (this->fallen_state != 0) {
+  /*if (this->fallen_state != 0) {
     this->odom_xpre_fall = msg->pose.pose.position.x;
     this->odom_ypre_fall = msg->pose.pose.position.y;
   }
   else {
     this->darwin_state = FALLEN_DARWIN;
     std::cout << "Fallen detectado con el odom callback" << std::endl;
-  }
+  }*/
 
   this->odom_x = msg->pose.pose.position.x;
   this->odom_y = msg->pose.pose.position.y;
@@ -219,7 +219,7 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
         bool ready_to_transform = false;
         fill_PoseStamped(i, msg, pose);
         //std::cout << msg->tags[i].header.frame_id << std::endl;
-        ready_to_transform = listener.waitForTransform("darwin/base_link", msg->tags[i].header.frame_id , ros::Time::now(), ros::Duration(0.2), ros::Duration(0.08333));
+        ready_to_transform = listener.waitForTransform("darwin/base_link", msg->tags[i].header.frame_id , msg->tags[i].header.stamp, ros::Duration(0.2), ros::Duration(0.08333));
         //std::cout << "ready_to_transform??: " << ready_to_transform << std::endl;
         if (ready_to_transform) {
           listener.transformPose("darwin/base_link", pose, transformed_pose);
@@ -365,7 +365,9 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
 
 void CeabotMazeAlgNode::calculate_next_move(void) {
     std::cout << "voy a calcular el siguiente movimiento con: " << this->next_x_mov << ' ' << this->next_z_mov << std::endl;
-    this->nm_x = 0.5*sqrt(pow(this->next_x_mov, 2) + pow(this->next_z_mov, 2));
+    this->nm_x = sqrt(pow(this->next_x_mov, 2) + pow(this->next_z_mov, 2));
+    if (this->nm_x > 1.0) this->nm_x = 1.0;
+    else this->nm_x *= 0.8;
     this->nm_alpha =  (atan2(this->next_x_mov, this->next_z_mov));
 
     this->darwin_state = MOVEMENT_ALPHA;
@@ -421,6 +423,7 @@ void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
     ROS_INFO("XY goal achieved, soon I'll be moving on!");
     this->walk.stop();
     this->darwin_state = IDLE;
+    this->state_stn = SPIN;
   }
   else {
     double tom = saturate_movement(this->config_.p * ((diffx+diffy)/2.0));
@@ -432,8 +435,10 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
   switch(this->darwin_state) {
     case IDLE:
       ROS_INFO("Darwin Ceabot Maze : state IDLE");
-      //if (this->walk.is_finished()) straight_to_north();
-      this->darwin_state = SCAN_MAZE;
+      if (this->walk.is_finished() and this->state_stn == SPIN) straight_to_north();
+      else if (this->state_stn != SPIN) straight_to_north();
+      //else this->walk.stop();
+      //this->darwin_state = SCAN_MAZE;
       break;
 
     case SCAN_MAZE:
@@ -701,6 +706,8 @@ void CeabotMazeAlgNode::find_holes(void) {
     std::pair <int, double> min_density; min_density.second = 1.0;
     int i = 0;
     std::vector < std::vector<std::pair <DDPOINT, double> > > holes_bysektor_aux;
+    if (half_maze_achieved) way_axis_grow = 1.0; //Se podria hacer una funcion
+    else way_axis_grow = -1.0;
     while(i < 5) {
         int k = 0;
         int sector = i;
@@ -717,7 +724,7 @@ void CeabotMazeAlgNode::find_holes(void) {
             //Now l_obs and r_obs are fullfilled with the desired obstacles
             //So we can check if there are some wholes between them
             distance=is_hole(&m_obs, &l_obs);
-            if (l_obs.qr_tag != "NULL" and (distance >= 0.5 - this->config_.ERROR_PERMES)){
+            if (l_obs.qr_tag != "NULL" and (distance >= 0.6 - this->config_.ERROR_PERMES)){
               calculate_point_to_move(&m_obs, &l_obs);
 
               DDPOINT p;
@@ -727,7 +734,7 @@ void CeabotMazeAlgNode::find_holes(void) {
             }
 
             distance=is_hole(&m_obs, &r_obs);
-            if (r_obs.qr_tag != "NULL" and (distance >= 0.5 - this->config_.ERROR_PERMES)) {
+            if (r_obs.qr_tag != "NULL" and (distance >= 0.6 - this->config_.ERROR_PERMES)) {
               calculate_point_to_move(&m_obs, &r_obs);
 
               DDPOINT p;
@@ -741,7 +748,7 @@ void CeabotMazeAlgNode::find_holes(void) {
                 calculate_point_to_move(NULL, &m_obs);
 
                 DDPOINT p;
-                p.x = this->next_x_mov; p.z = this->next_z_mov;
+                p.x = this->next_x_mov + way_axis_grow * 0.25; p.z = this->next_z_mov;
                 ho.first = p; ho.second = -1.0;
 
                 holes_aux.push_back(ho);
@@ -750,7 +757,7 @@ void CeabotMazeAlgNode::find_holes(void) {
                 calculate_point_to_move(&m_obs, NULL);
 
                 DDPOINT p;
-                p.x = this->next_x_mov; p.z = this->next_z_mov;
+                p.x = this->next_x_mov + way_axis_grow * 0.25; p.z = this->next_z_mov;
                 ho.first = p; ho.second = -1.0;
 
                 holes_aux.push_back(ho);
@@ -776,7 +783,7 @@ void CeabotMazeAlgNode::find_holes(void) {
       std::cout << "Sektor: " << i << std::endl;
       for (int j = 0; j < this->holes_bysektor [i].size(); ++j) {
         double d = this->holes_bysektor [i] [j].second;
-        if ((i == 4 or i == 0) and (hole_sector > 3 or hole_sector < 1) and d >= best.second) {
+        if (i == 2) {
           hole_sector = i;
           best.second = d;
           best.first = this->holes_bysektor [i] [j].first;
@@ -786,7 +793,7 @@ void CeabotMazeAlgNode::find_holes(void) {
           best.second = d;
           best.first = this->holes_bysektor [i] [j].first;
         }
-        else if (i == 2 and d >= best.second) {
+        else if ((i == 4 or i == 0) and (hole_sector == 4 or hole_sector == 0) and d >= best.second) {
           hole_sector = i;
           best.second = d;
           best.first = this->holes_bysektor [i] [j].first;
@@ -988,10 +995,11 @@ void CeabotMazeAlgNode::straight_to_north () { //Funciona??
   double diff = north_of_the_maze - bno055_measurement;
   switch (this->state_stn) {
     case CHECK_NORTH :
+      std::cout << "Checking north " << diff << std::endl;
       if (diff >= -ERROR and diff <= +ERROR) {
+        ROS_INFO("Now I'm straight to the North!");
         this->state_stn = STOP_SPINNING;
         this->walk.stop();
-        ROS_INFO("Now I'm straight to the North!");
       }
       else this->walk.set_steps_size(0.0, 0.0, 0.25*saturate_alpha(diff));
       break;
@@ -1001,12 +1009,14 @@ void CeabotMazeAlgNode::straight_to_north () { //Funciona??
       this->state_stn = CHECK_NORTH;
       break;
     case STOP_SPINNING :
+      ROS_INFO("Stop Spinning");
       if (this->walk.is_finished()) {
+        this->state_stn = SPIN;
         this->search_started = false;
         this->darwin_state = SCAN_MAZE;
       }
-      else this->walk.stop();
       break;
+
   }
 }
 
