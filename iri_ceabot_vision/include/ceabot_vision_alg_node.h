@@ -59,6 +59,7 @@
                MOVEMENT,
                CHECK_GOAL,
                WAIT_STOP_WALKING,
+               FINISHING_QR_SEARCH,
                END} darwin_states;
 
 struct qr_info {
@@ -313,6 +314,8 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
 
 
        void add_pan_angle_to_qr_id(void);
+
+       int rad_to_deg(double rad_angle);
 };
 
 #endif

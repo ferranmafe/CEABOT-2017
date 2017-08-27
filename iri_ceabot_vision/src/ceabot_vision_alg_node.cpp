@@ -235,11 +235,10 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
       if (qr_to_process.size() > 0) {
           qr_info next_qr_to_go = choose_the_correct_qr();
 
-          this->darwin_state = MOVEMENT;
           this->QR_identifier = next_qr_to_go.tag_id;
           add_pan_angle_to_qr_id();
 
-          double aux_old_goal_bno = this->bno055_measurement + obtain_angle_against_darwins_head(next_qr_to_go.x, next_qr_to_go.z) + this->pan_angle;
+          double aux_old_goal_bno = this->bno055_measurement + obtain_angle_against_darwins_head(next_qr_to_go.x, next_qr_to_go.z) - this->pan_angle;
           normalize_angle(aux_old_goal_bno);
 
           qr_seen.insert(next_qr_to_go.tag_id);
@@ -247,9 +246,13 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
 
           this->old_goal_bno = aux_old_goal_bno;
           if (head_search_started) {
-            head_search_started = false;
             head_state = 0;
-            this->tracking_module.stop_tracking();
+            update_pan_and_tilt();
+            this->tracking_module.update_target(this->pan_angle, this->tilt_angle);
+            darwin_state = FINISHING_QR_SEARCH;
+          }
+          else {
+            darwin_state = MOVEMENT;
           }
       }
       else {
@@ -350,6 +353,15 @@ void CeabotVisionAlgNode::state_machine(void) {
                 if (head_state <= 4) update_pan_and_tilt();
                 else darwin_state = END;
                 darwin_state = IDLE;
+            }
+        }
+        break;
+
+    case FINISHING_QR_SEARCH:
+        if (this->current_pan_angle >= (this->pan_angle - ERROR) and this->current_pan_angle <= (this->pan_angle + ERROR)) {
+            if (this->current_tilt_angle >= (this->tilt_angle - ERROR) and this->current_tilt_angle <= (this->tilt_angle + ERROR)){
+                darwin_state = MOVEMENT;
+                tracking_module.stop_tracking();
             }
         }
         break;
@@ -507,14 +519,14 @@ qr_info CeabotVisionAlgNode::choose_the_correct_qr(void) {
   double goal_calculated_old_qr = this->old_goal_bno + this->old_turn_angle + this->pan_angle;
   normalize_angle(goal_calculated_old_qr);
 
-  double goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(qr_to_process[0].x, qr_to_process[0].z) + this->pan_angle;
+  double goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(qr_to_process[0].x, qr_to_process[0].z) - this->pan_angle;
   normalize_angle(goal_calculated_new_qr);
 
   double qr_difference_respect_goal = goal_calculated_new_qr - goal_calculated_old_qr;
   obtain_absolute_value(qr_difference_respect_goal);
 
   for (int i = 1; i < qr_to_process.size(); ++i) {
-    goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(qr_to_process[i].x, qr_to_process[i].z) + this->pan_angle;
+    goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(qr_to_process[i].x, qr_to_process[i].z) - this->pan_angle;
 
     normalize_angle(goal_calculated_new_qr);
 
@@ -566,19 +578,36 @@ void CeabotVisionAlgNode::update_pan_and_tilt(void) {
 
 void CeabotVisionAlgNode::add_pan_angle_to_qr_id(void) {
   int angle_to_turn = 0;
-  int temp = 0;
+  std::string aux_string;
+  std::string inverse_temp;
+  std::string temp;
 
-  for (int k = 1; k < this->QR_identifier.size(); ++k) {
-    angle_to_turn = this->QR_identifier[k] - '0';
+  for (int k = 0; k < this->QR_identifier.size(); ++k) {
+    if (this->QR_identifier[k] >= '0' and this->QR_identifier[k] <= '9') aux_string.push_back(this->QR_identifier[k]);
   }
 
-  angle_to_turn += this->pan_angle;
+  int units = 0;
+  for (int i = aux_string.size() - 1; i >= 0; --i) {
+    angle_to_turn += (aux_string[i] - '0') * pow(10, units);
+    ++units;
+  }
+  angle_to_turn += rad_to_deg(this->pan_angle);
 
   while (angle_to_turn > 0) {
-    temp += angle_to_turn % 10 + '0';
+    inverse_temp.push_back(angle_to_turn % 10 + '0');
     angle_to_turn /= 10;
+  }
+
+  for (int i = aux_string.size() - 1; i >= 0; --i) {
+    temp.push_back(inverse_temp[i]);
+  }
+
+  this->QR_identifier = "Turn" + temp + this->QR_identifier[this->QR_identifier.size() - 1];
+  std::cout << "TAG post processing:" << this->QR_identifier << std::endl;
 }
-  this->QR_identifier = this->QR_identifier[0] + angle_to_turn;
+
+int CeabotVisionAlgNode::rad_to_deg(double rad_angle) {
+    return rad_angle * (180 / PI);
 }
 
 /* main function */
