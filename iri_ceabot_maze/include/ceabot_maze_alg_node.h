@@ -322,6 +322,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void straight_to_north ();
 
+      double distance_to_xy (double x, double y);
+
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
     // [diagnostic functions]
 
