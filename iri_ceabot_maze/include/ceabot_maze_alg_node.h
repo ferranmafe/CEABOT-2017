@@ -312,7 +312,9 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       double is_hole(qr_info* obs1, qr_info* obs2);
 
-      bool is_wall(qr_info* obs1);
+      bool is_wall(qr_info* obs);
+
+      bool is_goal_wall(qr_info* obs);
 
       void calculate_point_to_move(qr_info* obs1, qr_info* obs2);
 
