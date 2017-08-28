@@ -83,10 +83,7 @@ void user_loop(void)
 
   static int side_steps_count = 0;
 
-  //0--->two sensors detecting objective
-  //1--->left sensor not detecting
-  //2--->right sensor not detecting
-  static int sensor_cases_last_iteration = 0;
+  static int turn_to_right = 0;
 
   static int actual_attack = 0;
   static int adc5_read, adc6_read;
@@ -124,7 +121,7 @@ void user_loop(void)
                             break;
 
     case wait_side_step:     if(walk_left()) {
-                               if (side_steps_count > 3)
+                               if (side_steps_count > 2)
                                  state= scanning_enemy;
                                else {
                                  walk_left();
@@ -136,18 +133,21 @@ void user_loop(void)
                                state=wait_side_step;
                              break;
 
-     case scanning_enemy: adc6_read = exp_adc_get_avg_channel(ADC_PORT_6); adc5_read = exp_adc_get_avg_channel(ADC_PORT_5);
+     case scanning_enemy: right_sensor = exp_adc_get_avg_channel(ADC_PORT_6);
+                          middle_sensor = exp_adc_get_avg_channel(ADC_PORT_5);
+                          left_sensor = exp_adc_get_avg_channel(ADC_PORT_4);
 
-                          if (adc6_read >= 300 + error && adc5_read >= 300 + error) sensor_cases_last_iteration = 0;
-                          else if (adc6_read < 300 - error && adc5_read >= 300 + error) sensor_cases_last_iteration = 2;
-                          else if (adc5_read < 300 - error && adc6_read >= 300 + error) sensor_cases_last_iteration = 1;
+                          if (right_sensor >= 300) turn_to_right = 1;
+                          else if (middle_sensor >= 300 - error) turn_to_right = 0;
 
+                          cm510_printf("Turn to left: %d\n",turn_to_right);
+			                       _delay_ms(100);
 
-                          if (adc6_read >= 400 + error || adc5_read >= 400 + error) {
+                          if (middle_sensor >= 400 + error) {
                             state = attack;
                           }
-                          else if (adc6_read <= 300 - error && adc5_read <= 300 - error) {
-                            if (sensor_cases_last_iteration == 2) turn_left();
+                          else if (adc6_read <= 300 - error) {
+                            if (!(turn_to_right == 1)) turn_left();
                             else turn_right();
                             state = searching_enemy;
                           }
@@ -166,19 +166,25 @@ void user_loop(void)
       case wait_attack: if (is_action_running()) state = wait_attack;
                         else {
                           if (last_attack == 3) state = check_fallen;
-                          else state = scanning_enemy;
+                          else {
+                            action_set_page(31);
+                            action_start_page();
+                            state=wait_ready;
+                          }
                         }
                         break;
 
-      case searching_enemy:   adc6_read = exp_adc_get_avg_channel(ADC_PORT_6); adc5_read = exp_adc_get_avg_channel(ADC_PORT_5);
+      case searching_enemy:   right_sensor = exp_adc_get_avg_channel(ADC_PORT_6);
+                              middle_sensor = exp_adc_get_avg_channel(ADC_PORT_5);
+                              left_sensor = exp_adc_get_avg_channel(ADC_PORT_4);
 
-                              if (adc6_read > 300 - error || adc5_read > 300 - error) {
+                              if (middle_sensor > 300 - error) {
                                 mtn_lib_stop_mtn();
                                 state=wait_search;
                               }
 
                               else state=searching_enemy;
-                              if (sensor_cases_last_iteration == 2) turn_left();
+                              if (!(turn_to_right == 1)) turn_left();
                               else turn_right();
                               break;
 
@@ -188,9 +194,11 @@ void user_loop(void)
                                  state=wait_search;
                                break;
 
-     case walking_to_enemy: adc6_read = exp_adc_get_avg_channel(ADC_PORT_6); adc5_read = exp_adc_get_avg_channel(ADC_PORT_5);
+     case walking_to_enemy: right_sensor = exp_adc_get_avg_channel(ADC_PORT_6);
+                            middle_sensor = exp_adc_get_avg_channel(ADC_PORT_5);
+                            left_sensor = exp_adc_get_avg_channel(ADC_PORT_4);
 
-                            if (adc6_read >= 400 - error || adc6_read <= 300 + error || adc5_read >= 400 - error || adc5_read <= 300 + error) {
+                            if (middle_sensor >= 400 - error || middle_sensor <= 300 + error) {
                                mtn_lib_stop_mtn();
                                state=wait_walk;
                              }
@@ -216,10 +224,11 @@ void user_loop(void)
 
                        break;
 
-     case get_up: if(get_up_process(fall_state)==0x01)
+     case get_up: if(get_up_process(fall_state)==0x01) {
                      action_set_page(31);
                      action_start_page();
                      state=wait_ready;
+                  }
                  else
                    state=get_up;
                  break;

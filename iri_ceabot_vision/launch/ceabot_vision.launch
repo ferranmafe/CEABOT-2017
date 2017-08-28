@@ -73,23 +73,15 @@
        <!-- Odometry remaps -->
         <remap from="/darwin/iri_ceabot_vision/odom"
               to="/darwin/robot/odom"/>
-  </node>
 
-  <!-- launch the qr detector node -->
-  <node pkg="qr_detector"
-        name="qr_detector"
-        type="qr_detector"
-        output="screen"
-        ns="/darwin">
-        <param name="qr_x" value="0.12"/>
-        <param name="qr_y" value="0.12"/>
-        <param name="camera_frame" value="/darwin/camera_link"/>
-        <remap from="/darwin/qr_detector/camera/image_raw"
+	<remap from="/darwin/qr_detector/camera/image_raw"
                  to="/darwin/camera/image_raw"/>
         <remap from="/darwin/qr_detector/camera/camera_info"
                  to="/darwin/camera/camera_info"/>
         <remap from="/darwin/qr_detector/qr_pose"
                  to="/darwin/iri_ceabot_vision/qr_pose"/>
+		
+
   </node>
 
   <!-- launch the darwin_buttons to simulate the polling -->
