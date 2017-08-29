@@ -31,9 +31,11 @@
 #include <humanoid_modules/walk_module.h>
 #include <humanoid_modules/head_tracking_module.h>
 #include <humanoid_modules/action_module.h>
+#include <iri_ros_tools/timeout.h>
+
 
 #define PI 3.1415926535
-#define ERROR 0.085
+#define ERROR 0.12
 
 // [publisher subscriber headers]
 #include <std_msgs/Int8.h>
@@ -50,7 +52,6 @@
 #include <math.h>
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
-
 
 
 // [service client headers]
@@ -76,8 +77,9 @@
                FALLEN_DARWIN,
                IS_DARWIN_STANDING,
                CHECK_NORTH,
-               SPIN,
-               STOP_SPINNING
+               STOP_SPINNING,
+               CHECK_STOP_SPINNING,
+               WAIT
                } darwin_states;
 
 struct position {
@@ -179,9 +181,12 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     int    turn_left;
     int    fallen_state;
     int    direction;
-    int way_axis_grow;
+    int way_zaxis_grow;
+    int way_xaxis_grow;
     double next_x_mov;
     double next_z_mov;
+    double time_to_wait;
+    CROSTimeout timeout;
     tf::TransformListener listener;
 
     std::vector<std::pair <int, double> > ocupation;

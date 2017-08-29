@@ -8,9 +8,9 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   //init class attributes if necessary
   //this->loop_rate_ = 2;//in [Hz]
   this->event_start = true;
-
+  this->time_to_wait = 5.0;
   this->darwin_state = SCAN_MAZE;
-  this->state_stn = SPIN;
+  this->state_stn = CHECK_NORTH;
   this->half_maze_achieved = false;
   this->first_bno_lecture = true;
   this->half_maze_achieved = false;
@@ -18,14 +18,13 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   this->next_z_mov = 0.0;
   this->nm_x = 1.0;
   this->nm_alpha =  -0.45;
-
-
   this->search_started=false;
-
   this->direction = 0;
   this->turn_left = 1;
   this->fallen_state = 0;
   this->qr_information = std::vector < std::vector <qr_info> > (5);
+  this->way_zaxis_grow = 1.0;
+  this->way_xaxis_grow = 0.0;
   // [init publishers]
 
   // [init subscribers]
@@ -43,7 +42,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
 
   this->qr_pose_subscriber_ = this->public_node_handle_.subscribe("qr_pose", 1, &CeabotMazeAlgNode::qr_pose_callback, this);
   pthread_mutex_init(&this->qr_pose_mutex_,NULL);
-  // [init services]+ way_axis_grow*0.2
+  // [init services]
 
   // [init clients]
 
@@ -207,42 +206,44 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
-  //std::cout << "entro " << "searching_for_qr: " << this->searching_for_qr  << std::endl;
+
+  std::cout << "entro " << "searching_for_qr: " << this->searching_for_qr  << std::endl;
   geometry_msgs::PoseStamped transformed_pose;
   geometry_msgs::PoseStamped pose;
   if (msg->tags.size()>0) {
     if (this->searching_for_qr) {
-      //std::cout << "entro2" << std::endl;
+      std::cout << "I'm searching for QR!" << std::endl;
       int zone_to_scan = actual_zone_to_scan();
+      //std::cout << "entro2" << std::endl;
       std::vector<qr_info> vec_aux;
       for (int i = 0; i < msg->tags.size(); ++i) {
         bool ready_to_transform = false;
         fill_PoseStamped(i, msg, pose);
         //std::cout << msg->tags[i].header.frame_id << std::endl;
-        ready_to_transform = listener.waitForTransform("darwin/base_link", msg->tags[i].header.frame_id , msg->tags[i].header.stamp, ros::Duration(0.2), ros::Duration(0.08333));
+        ready_to_transform = listener.waitForTransform("darwin/base_link", msg->tags[i].header.frame_id , msg->tags[i].header.stamp, ros::Duration(0.3), ros::Duration(0.08333));
         //std::cout << "ready_to_transform??: " << ready_to_transform << std::endl;
         if (ready_to_transform) {
           listener.transformPose("darwin/base_link", pose, transformed_pose);
-          //tf::Vector3 in(msg->tags[i].position.z, msg->tags[i].position.x, msg->tags[i].position.y);
-          //tf::Vector3 out = t.operator()(in);
 
           qr_info aux;
           aux.pose = pose;
           aux.qr_tag = msg->tags[i].tag_id;
-          //aux.pos.x = out.x(); aux.pos.y = out.y(); aux.pos.z = out.z();
+
           aux.pos.x = transformed_pose.pose.position.x; aux.pos.y = transformed_pose.pose.position.y; aux.pos.z = transformed_pose.pose.position.z;
           aux.ori.x = transformed_pose.pose.orientation.x; aux.ori.y = transformed_pose.pose.orientation.y; aux.ori.z = transformed_pose.pose.orientation.z; aux.ori.w = transformed_pose.pose.orientation.w;
 
-          //std::cout << std::endl;
-          //std::cout << "Rotation angle: " << this->current_pan_angle << std::endl;
-          //std::cout << "Tag ID: " << msg->tags[i].tag_id << std::endl;
-          //std::cout <<  "Old X pos: " << msg->tags[i].position.x << " Old Y pos: " << msg->tags[i].position.y << " Old Z pos: " <<  msg->tags[i].position.z << std::endl;
-          //std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
-          //std::cout << std::endl;
+          std::cout << std::endl;
+          std::cout << "SECTOR: " << zone_to_scan << std::endl;
+          std::cout << "Tag ID: " << msg->tags[i].tag_id << std::endl;
+          std::cout <<  "Old X pos: " << msg->tags[i].position.x << " Old Y pos: " << msg->tags[i].position.y << " Old Z pos: " <<  msg->tags[i].position.z << std::endl;
+          std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
+          std::cout << std::endl;
 
           vec_aux.push_back(aux);
         }
       }
+      this->searching_for_qr = false;
+
       std::sort(vec_aux.begin(), vec_aux.end(), distance_sort);
       qr_information [zone_to_scan] = vec_aux;
     }
@@ -337,9 +338,11 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
       if (this->direction == -1 or (aux_pan >= (-PI/2.0 - ERROR) and aux_pan <= (-PI/2.0 + ERROR))) {
         //std::cout << "wait for scan entro" << std::endl;
         this->searching_for_qr = true;
-        ros::Duration(1.0).sleep();
+        this->time_to_wait = 2.0;
+        this->timeout.start(ros::Duration(this->time_to_wait)); //Start a time out and go to wait
+        this->darwin_state = WAIT;
       }
-      this->darwin_state = SCAN_MAZE;
+      if (this->darwin_state != WAIT) this->darwin_state = SCAN_MAZE;
     }
     if (this->current_angle_travelled == DegtoRad(360.0)) {
       this->tracking_module.stop_tracking();
@@ -365,7 +368,7 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
 void CeabotMazeAlgNode::calculate_next_move(void) {
     std::cout << "voy a calcular el siguiente movimiento con: " << this->next_x_mov << ' ' << this->next_z_mov << std::endl;
     this->nm_x = distance_to_xy(this->next_x_mov, this->next_z_mov);
-    if (this->nm_x > 1.5) this->nm_x = 1.5;
+    if (this->nm_x > 1.0) this->nm_x = 1.0;
     else this->nm_x *= 0.8;
     this->nm_alpha =  (atan2(this->next_x_mov, this->next_z_mov));
 
@@ -422,7 +425,7 @@ void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
     ROS_INFO("XY goal achieved, soon I'll be moving on!");
     this->walk.stop();
     this->darwin_state = IDLE;
-    this->state_stn = SPIN;
+    this->state_stn = CHECK_NORTH;
   }
   else {
     double tom = saturate_movement(this->config_.p * ((diffx+diffy)/2.0));
@@ -433,10 +436,9 @@ void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
 void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion los cambios de estado que son unicos, o sea, que son transiciones simples...
   switch(this->darwin_state) {
     case IDLE:
+      this->qr_information = std::vector < std::vector <qr_info> > (5);
       ROS_INFO("Darwin Ceabot Maze : state IDLE");
-      if (this->walk.is_finished() and this->state_stn == SPIN) straight_to_north();
-      else if (this->state_stn != SPIN) straight_to_north();
-      else this->walk.stop();
+      straight_to_north();
       //this->darwin_state = SCAN_MAZE;
       break;
 
@@ -523,6 +525,14 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
         }
         this->nm_x = 0.0;
       }*/
+      break;
+    case WAIT:
+      ROS_INFO("Waiting...");
+      if (this->timeout.timed_out()) {
+        this->timeout.stop();
+        this->searching_for_qr = false;
+        this->darwin_state = SCAN_MAZE;
+      }
       break;
   }
 
@@ -611,11 +621,12 @@ void CeabotMazeAlgNode::search_for_goal_qr (void) {
             for (int j = 0; j < this->qr_information[i].size(); ++j) {
                 std::pair<std::string, int> aux = divide_qr_tag (this->qr_information[i][j].qr_tag);
                 double dis_to_goal = distance_to_xy(this->qr_information[i][j].pos.x, this->qr_information[i][j].pos.z);
-                if (aux.second > 6 and aux.first == "N" and (dis_to_goal >= 0.8 - ERROR and dis_to_goal <= 0.8 + ERROR) and dis_to_goal < best_dis) { //First step on the maze
+                if (is_goal_wall(&this->qr_information[i][j]) and (dis_to_goal >= 0.9 - ERROR and dis_to_goal <= 0.9 + ERROR) and dis_to_goal < best_dis) { //First step on the maze
+                    std::cout << "El GOAL_QR es: " << this->qr_information[i][j].qr_tag << std::endl;
                     this->wall_qr_goal_found = true;
 
                     this->next_x_mov = this->qr_information[i][j].pos.x;
-                    this->next_z_mov = this->qr_information[i][j].pos.z;
+                    this->next_z_mov = this->qr_information[i][j].pos.z - 0.1;
 
                     std::cout << this->next_x_mov << " " << this->next_z_mov << std::endl;
                     best_dis = dis_to_goal;
@@ -629,11 +640,11 @@ void CeabotMazeAlgNode::search_for_goal_qr (void) {
             for (int j = 0; j < this->qr_information[i].size(); ++j) {
                 std::pair<std::string, int> aux = divide_qr_tag (this->qr_information[i][j].qr_tag);
                 double dis_to_goal = distance_to_xy(this->qr_information[i][j].pos.x, this->qr_information[i][j].pos.z);
-                if (aux.second > 6 and aux.first == "S" and (dis_to_goal >= 0.8 - ERROR and dis_to_goal <= 0.8 + ERROR) and dis_to_goal < best_dis) { //Second and last step on the maze
+                if (is_goal_wall(&this->qr_information[i][j]) and (dis_to_goal >= 0.9 - ERROR and dis_to_goal <= 0.9 + ERROR) and dis_to_goal < best_dis) { //Second and last step on the maze
                     this->wall_qr_goal_found = true;
 
-                    this->next_x_mov = this->qr_information[i][j].pos.x ;
-                    this->next_z_mov = this->qr_information[i][j].pos.z;
+                    this->next_x_mov = this->qr_information[i][j].pos.x;
+                    this->next_z_mov = this->qr_information[i][j].pos.z + 0.1;
 
                     //std::cout << this->next_x_mov << " " << this->next_z_mov << std::endl;
                     best_dis = dis_to_goal;
@@ -709,8 +720,8 @@ void CeabotMazeAlgNode::find_holes(void) {
     std::pair <int, double> min_density; min_density.second = 1.0;
     int i = 0;
     std::vector < std::vector<std::pair <DDPOINT, double> > > holes_bysektor_aux;
-    if (half_maze_achieved) way_axis_grow = 1.0; //Se podria hacer una funcion
-    else way_axis_grow = -1.0;
+    if (half_maze_achieved) way_zaxis_grow = 1.0; //Se podria hacer una funcion
+    else way_zaxis_grow = -1.0;
     while(i < 5) {
         int k = 0;
         int sector = i;
@@ -727,23 +738,27 @@ void CeabotMazeAlgNode::find_holes(void) {
             //Now l_obs and r_obs are fullfilled with the desired obstacles
             //So we can check if there are some wholes between them
             distance=is_hole(&m_obs, &l_obs);
-            if (l_obs.qr_tag != "NULL" and (distance >= 0.6 - this->config_.ERROR_PERMES and distance <= 0.8 + this->config_.ERROR_PERMES)){
+            if (l_obs.qr_tag != "NULL" and (distance >= 0.6 - this->config_.ERROR_PERMES and distance <= 0.75 + this->config_.ERROR_PERMES)) {
               calculate_point_to_move(&m_obs, &l_obs);
-
+              if (not half_maze_achieved) way_xaxis_grow = 1.0;
+              else if (half_maze_achieved) way_xaxis_grow = -1.0;
               DDPOINT p;
-              if (!is_wall(&l_obs)) p.x = this->next_x_mov + way_axis_grow * 0.15;
-              p.x = this->next_x_mov; p.z = this->next_z_mov;
+              if (!is_wall(&l_obs)) p.x = this->next_x_mov + way_xaxis_grow * 0.35;
+              else p.x = this->next_x_mov;
+              p.z = this->next_z_mov;
               ho.first = p; ho.second = distance;
               holes_aux.push_back(ho);
             }
 
             distance=is_hole(&m_obs, &r_obs);
-            if (r_obs.qr_tag != "NULL" and (distance >= 0.6 - this->config_.ERROR_PERMES and distance <= 0.8 + this->config_.ERROR_PERMES)) {
+            if (r_obs.qr_tag != "NULL" and (distance >= 0.6 - this->config_.ERROR_PERMES and distance <= 0.75 + this->config_.ERROR_PERMES)) {
               calculate_point_to_move(&m_obs, &r_obs);
-
+              if (not half_maze_achieved) way_xaxis_grow = -1.0;
+              else if (half_maze_achieved) way_xaxis_grow = 1.0;
               DDPOINT p;
-              if (!is_wall(&r_obs)) p.x = this->next_x_mov + way_axis_grow * 0.15;
-              p.x = this->next_x_mov; p.z = this->next_z_mov;
+              if (!is_wall(&r_obs)) p.x = this->next_x_mov + way_xaxis_grow * 0.35;
+              else p.x = this->next_x_mov;
+              p.z = this->next_z_mov;
               ho.first = p; ho.second = distance;
               holes_aux.push_back(ho);
             }
@@ -751,19 +766,21 @@ void CeabotMazeAlgNode::find_holes(void) {
             if (l_obs.qr_tag == "NULL" or r_obs.qr_tag == "NULL") {
               if (l_obs.qr_tag == "NULL") {
                 calculate_point_to_move(NULL, &m_obs);
-
+                if (not half_maze_achieved) way_xaxis_grow = 1.0;
+                else if (half_maze_achieved) way_xaxis_grow = -1.0;
                 DDPOINT p;
-                p.x = this->next_x_mov + way_axis_grow * 0.35; p.z = this->next_z_mov;
-                ho.first = p; ho.second = -1.0;
+                p.x = this->next_x_mov + way_xaxis_grow * 0.6; p.z = this->next_z_mov + way_zaxis_grow * 0.3;
+                ho.first = p; ho.second = +9999.0;
 
                 holes_aux.push_back(ho);
               }
               if (r_obs.qr_tag == "NULL") {
                 calculate_point_to_move(&m_obs, NULL);
-
+                if (not half_maze_achieved) way_xaxis_grow = -1.0;
+                else if (half_maze_achieved) way_xaxis_grow = 1.0;
                 DDPOINT p;
-                p.x = this->next_x_mov + way_axis_grow * 0.35; p.z = this->next_z_mov;
-                ho.first = p; ho.second = -1.0;
+                p.x = this->next_x_mov + way_xaxis_grow * 0.6; p.z = this->next_z_mov + way_zaxis_grow * 0.3;
+                ho.first = p; ho.second = +9999.0;
 
                 holes_aux.push_back(ho);
               }
@@ -783,7 +800,7 @@ void CeabotMazeAlgNode::find_holes(void) {
 
     int hole_sector = 0;
     std::pair <DDPOINT, double> best;
-    best.second = -1.0; best.first.x = 0.0; best.first.z = 0.0;
+    best.second = +9999.0; best.first.x = 0.0; best.first.z = 0.0;
     for (int i = 0; i < this->holes_bysektor.size(); ++i) {
       std::cout << "Sektor: " << i << std::endl;
       for (int j = 0; j < this->holes_bysektor [i].size(); ++j) {
@@ -793,12 +810,12 @@ void CeabotMazeAlgNode::find_holes(void) {
           best.second = d;
           best.first = this->holes_bysektor [i] [j].first;
         }
-        else if ((i == 3 or i == 1) and (hole_sector != 2) and d >= best.second) {
+        else if ((i == 3 or i == 1) and (hole_sector != 2) and d <= best.second) {
           hole_sector = i;
           best.second = d;
           best.first = this->holes_bysektor [i] [j].first;
         }
-        else if ((i == 4 or i == 0) and (hole_sector == 4 or hole_sector == 0) and d >= best.second) {
+        else if ((i == 4 or i == 0) and (hole_sector == 4 or hole_sector == 0) and d <= best.second) {
           hole_sector = i;
           best.second = d;
           best.first = this->holes_bysektor [i] [j].first;
@@ -853,14 +870,16 @@ bool CeabotMazeAlgNode::is_wall(qr_info* obs) {
 
 bool CeabotMazeAlgNode::is_goal_wall(qr_info* obs) {
   std::pair<std::string, int> aux = divide_qr_tag(obs->qr_tag);
-  if (aux.first == "N" or aux.first == "S") return true;
+  std::cout << "QR_TAG: " << aux.first << std::endl;
+  if ((aux.first == "N" or aux.first == "S") and aux.second > 6) return true;
   else return false;
 
 }
 
 
 double CeabotMazeAlgNode::is_hole(qr_info* obs1, qr_info* obs2) {
-  if (obs1 != NULL and obs2 != NULL) {
+    std::cout << obs1->qr_tag << ' ' << obs2->qr_tag << ' ' << (is_goal_wall(obs1) or is_goal_wall(obs2)) << std::endl;
+    if (obs1 != NULL and obs2 != NULL and not (is_goal_wall(obs1) or is_goal_wall(obs2))) {
       double distance = distance_to_xy(obs1->pos.x - obs2->pos.x, obs1->pos.z - obs2->pos.z);
       bool rtt = false;
       geometry_msgs::PoseStamped transformed_pose;
@@ -885,7 +904,8 @@ double CeabotMazeAlgNode::is_hole(qr_info* obs1, qr_info* obs2) {
 
       return distance;
     }
-    else return -1.0; //Es OBJ y NULL O VICEVERSA
+
+    return +9999.0; //Es OBJ y NULL O VICEVERSA
 }
 
 void CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2) {
@@ -1010,26 +1030,25 @@ void CeabotMazeAlgNode::straight_to_north () { //Funciona??
     case CHECK_NORTH :
       std::cout << "Checking north " << diff << std::endl;
       if (diff >= -ERROR and diff <= +ERROR) {
-        ROS_INFO("Now I'm straight to the North!");
+        ROS_INFO ("Now I'm straight to the North!");
         this->state_stn = STOP_SPINNING;
-        this->walk.stop();
       }
       else this->walk.set_steps_size(0.0, 0.0, 0.25*saturate_alpha(diff));
       break;
-    case SPIN :
-      ROS_INFO("SPIIIIIIIIIIIIIIIIIIIN");
-      this->walk.set_steps_size(0.0, 0.0, 0.25*saturate_alpha(diff));
-      this->state_stn = CHECK_NORTH;
-      break;
     case STOP_SPINNING :
-      ROS_INFO("Stop Spinning");
-      if (this->walk.is_finished()) {
-        this->state_stn = SPIN;
-        this->search_started = false;
-        this->darwin_state = SCAN_MAZE;
-      }
-      break;
+      ROS_INFO ("Stop Spinning");
+      this->walk.stop();
+      this->state_stn = CHECK_STOP_SPINNING;
 
+      break;
+    case CHECK_STOP_SPINNING :
+      ROS_INFO ("Check Stop Spinning");
+      if (this->walk.is_finished()) {
+        this->darwin_state = SCAN_MAZE;
+        this->search_started = false;
+      }
+      else this->walk.stop();
+      break;
   }
 }
 
