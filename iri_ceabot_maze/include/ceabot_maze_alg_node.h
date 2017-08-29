@@ -49,6 +49,7 @@
 #include <iostream>
 #include <algorithm>
 #include <vector>
+#include <map>
 #include <math.h>
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
@@ -66,6 +67,7 @@
  typedef enum {IDLE,
                SCAN_MAZE,
                WAIT_FOR_SCAN,
+               PROCESS_DATA,
                SEARCH_FOR_GOAL_QR,
                CALCULATE_DENSITY,
                FIND_HOLES,
@@ -190,7 +192,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     tf::TransformListener listener;
 
     std::vector<std::pair <int, double> > ocupation;
-    std::vector<std::vector <qr_info> > qr_information;
+    std::map<std::string, std::vector<qr_info> > qr_info_pre_processing;
+    std::vector<qr_info> qr_information;
     std::vector<std::pair <DDPOINT, double> > holes_magn;
     std::vector < std::vector<std::pair <DDPOINT, double> > > holes_bysektor;
 
@@ -330,6 +333,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       void straight_to_north ();
 
       double distance_to_xy (double x, double y);
+
+      void process_data(void);
 
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
     // [diagnostic functions]

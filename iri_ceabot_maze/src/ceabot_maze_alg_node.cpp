@@ -214,8 +214,7 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
     if (this->searching_for_qr) {
       std::cout << "I'm searching for QR!" << std::endl;
       int zone_to_scan = actual_zone_to_scan();
-      //std::cout << "entro2" << std::endl;
-      std::vector<qr_info> vec_aux;
+
       for (int i = 0; i < msg->tags.size(); ++i) {
         bool ready_to_transform = false;
         fill_PoseStamped(i, msg, pose);
@@ -239,15 +238,11 @@ void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_ar
           std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
           std::cout << std::endl;
 
-          vec_aux.push_back(aux);
+          qr_info_pre_processing[aux.qr_tag].push_back(aux);
         }
       }
-      this->searching_for_qr = false;
-
-      std::sort(vec_aux.begin(), vec_aux.end(), distance_sort);
-      qr_information [zone_to_scan] = vec_aux;
+      //std::sort(vec_aux.begin(), vec_aux.end(), distance_sort);
     }
-
   }
   this->qr_pose_mutex_exit();
 }
@@ -305,6 +300,7 @@ void CeabotMazeAlgNode::init_headt_module(void) {
 
 void CeabotMazeAlgNode::scan_maze(void) {
     if (!this->search_started) {
+      qr_info_pre_processing.clear();
       this->direction = 1;
       this->goal_x = PI/2.0;
       this->goal_y = PI/4.5;
@@ -347,19 +343,8 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
     if (this->current_angle_travelled == DegtoRad(360.0)) {
       this->tracking_module.stop_tracking();
       this->search_started = false;
-      this->darwin_state = SEARCH_FOR_GOAL_QR;
+      this->darwin_state = PROCESS_DATA;
       this->direction = 0;
-
-      for (int i = 0; i < qr_information.size(); ++i) {
-        std::cout << " Sector i: " << i << std::endl;
-        for (int j = 0; j < qr_information[i].size(); ++j) {
-          std::cout << std::endl;
-          std::cout << qr_information[i][j].qr_tag << std::endl;
-          std::cout << "X pos: " << qr_information[i][j].pos.x << " Y pos: " << qr_information[i][j].pos.y << " Z pos: " << qr_information[i][j].pos.z << std::endl;
-          std::cout << "---------------------------------" << std::endl;
-          std::cout << std::endl;
-        }
-      }
 
     }
   }
@@ -436,7 +421,6 @@ void CeabotMazeAlgNode::check_goal_xy(double goalx, double goaly) {
 void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion los cambios de estado que son unicos, o sea, que son transiciones simples...
   switch(this->darwin_state) {
     case IDLE:
-      this->qr_information = std::vector < std::vector <qr_info> > (5);
       ROS_INFO("Darwin Ceabot Maze : state IDLE");
       straight_to_north();
       //this->darwin_state = SCAN_MAZE;
@@ -450,6 +434,11 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
     case WAIT_FOR_SCAN:
       ROS_INFO("Waiting for scan...");
       wait_for_scan();
+      break;
+
+    case PROCESS_DATA:
+      ROS_INFO("Processing data...");
+      process_data();
       break;
 
     case SEARCH_FOR_GOAL_QR:
@@ -857,8 +846,6 @@ void CeabotMazeAlgNode::find_holes(void) {
     this->next_z_mov = best.first.z;
 
     std::cout << "Me voy a mover a : " << "x: " << this->next_x_mov << " z:" << this->next_z_mov << std::endl;*/
-
-
 }
 
 bool CeabotMazeAlgNode::is_wall(qr_info* obs) {
@@ -1054,6 +1041,45 @@ void CeabotMazeAlgNode::straight_to_north () { //Funciona??
 
 double CeabotMazeAlgNode::distance_to_xy (double x, double y) {
   return sqrt(pow(x,2)+pow(y,2));
+}
+
+void CeabotMazeAlgNode::process_data(void) {
+  vector <qr_info> vec_aux;
+
+  for (std::map<std::string,std::vector<qr_info> >::iterator it=this->qr_info_pre_processing.begin(); it!=this->qr_info_pre_processing.end(); ++it) {
+    qr_info qr_aux;
+    qr_aux.qr_tag = it->first;
+    for (int i = 0; i < it->second.size(); ++i) {
+      qr_aux.pos.x += it->second.pos.x;
+      qr_aux.pos.y += it->second.pos.y;
+      qr_aux.pos.z += it->second.pos.z;
+      qr_aux.ori.x += it->second.ori.x;
+      qr_aux.ori.y += it->second.ori.y;
+      qr_aux.ori.z += it->second.ori.z;
+      qr_aux.ori.w += it->second.ori.w;
+    }
+    qr_aux.pos.x /= it->second.size();
+    qr_aux.pos.y /= it->second.size();
+    qr_aux.pos.z /= it->second.size();
+    qr_aux.ori.x /= it->second.size();
+    qr_aux.ori.y /= it->second.size();
+    qr_aux.ori.z /= it->second.size();
+    qr_aux.ori.w /= it->second.size();
+
+    vec_aux.push_back(qr_aux);
+  }
+  std::sort(vec_aux.begin(), vec_aux.end(), distance_sort);
+
+  this->qr_information = vec_aux;
+  this->darwin_state = SEARCH_FOR_GOAL_QR;
+
+  for (int i = 0; i < qr_information.size(); ++i) {
+    std::cout << std::endl;
+    std::cout << qr_information[i].qr_tag << std::endl;
+    std::cout << "X pos: " << qr_information[i].pos.x << " Y pos: " << qr_information[i].pos.y << " Z pos: " << qr_information[i].pos.z << std::endl;
+    std::cout << "---------------------------------" << std::endl;
+    std::cout << std::endl;S
+  }
 }
 
 /* main function */

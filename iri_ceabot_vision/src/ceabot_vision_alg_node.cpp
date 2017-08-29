@@ -80,7 +80,7 @@ void CeabotVisionAlgNode::mainNodeThread(void) {
 /*  [subscriber callbacks] */
 void CeabotVisionAlgNode::buttons_callback(const dynamic_reconfigure::Config::ConstPtr& msg)
 {
-  //ROS_INFO("CeabotVisionAlgNode::buttons_callback: New Message Received");
+  ROS_INFO("CeabotVisionAlgNode::buttons_callback: New Message Received");
 
   //use appropiate mutex to shared variables if necessary
   //this->alg_.lock();
