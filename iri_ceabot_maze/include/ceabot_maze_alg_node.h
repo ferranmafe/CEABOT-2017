@@ -78,8 +78,11 @@
                FALLEN_DARWIN,
                IS_DARWIN_STANDING,
                CHECK_NORTH,
-               STOP_SPINNING,
-               CHECK_STOP_SPINNING,
+               STOP_SPINNING_NORTH,
+               CHECK_STOP_SPINNING_NORTH,
+               CHECK_SOUTH,
+               STOP_SPINNING_SOUTH,
+               CHECK_STOP_SPINNING_SOUTH,
                WAIT,
                WAIT_TRACKING
                } darwin_states;
@@ -155,6 +158,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     bool event_start;
     darwin_states darwin_state; //Actual
     darwin_states state_stn;
+    darwin_states state_sts;
     bool half_maze_achieved;
 
     bool search_started;
@@ -181,6 +185,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     double mov_x_goal;
     double mov_y_goal;
     double north_of_the_maze;
+    double south_of_the_maze;
     int    turn_left;
     int    fallen_state;
     int    direction;
@@ -324,6 +329,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       void fill_PoseStamped (int i, const humanoid_common_msgs::tag_pose_array::ConstPtr &in, geometry_msgs::PoseStamped &out);
 
       void straight_to_north ();
+
+      void straight_to_south ();
 
       double distance_to_xy (double x, double y);
 

@@ -11,6 +11,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   this->time_to_wait = 5.0;
   this->darwin_state = SCAN_MAZE;
   this->state_stn = CHECK_NORTH;
+  this->state_sts = CHECK_SOUTH;
   this->half_maze_achieved = false;
   this->first_bno_lecture = true;
   this->half_maze_achieved = false;
@@ -132,6 +133,7 @@ void CeabotMazeAlgNode::imu_callback(const sensor_msgs::Imu::ConstPtr& msg) {
   if (this->first_bno_lecture) {
     this->first_bno_lecture = false;
     this->north_of_the_maze = bnoaux;
+    this->south_of_the_maze = bnoaux - PI;
   }
   //ROS_INFO("Darwin Ceabot Vision : The actual Yaw is : %f", this->bno055_measurement);
   //std::cout << msg->data << std::endl;
@@ -824,29 +826,55 @@ void CeabotMazeAlgNode::straight_to_north () {
       std::cout << "Checking north " << diff << std::endl;
       if (diff >= -ERROR and diff <= +ERROR) {
         ROS_INFO ("Now I'm straight to the North!");
-        this->state_stn = STOP_SPINNING;
+        this->state_stn = STOP_SPINNING_NORTH;
       }
       else this->walk.set_steps_size(0.0, 0.0, 0.25*saturate_alpha(diff));
       break;
-    case STOP_SPINNING :
-      ROS_INFO ("Stop Spinning");
+    case STOP_SPINNING_NORTH :
+      ROS_INFO ("Stop Spinning North...");
       this->walk.stop();
-      this->state_stn = CHECK_STOP_SPINNING;
+      this->state_stn = CHECK_STOP_SPINNING_NORTH;
 
       break;
-    case CHECK_STOP_SPINNING :
-      ROS_INFO ("Check Stop Spinning");
+    case CHECK_STOP_SPINNING_NORTH :
+      ROS_INFO ("Check Stop Spinning North...");
       if (this->walk.is_finished()) {
         this->darwin_state = SCAN_MAZE;
         this->search_started = false;
       }
       else this->walk.stop();
       break;
+
   }
 }
 
 void CeabotMazeAlgNode::straight_to_south () {
   double diff = this->south_of_the_maze - this->bno055_measurement;
+  switch (this->state_sts) {
+    case CHECK_SOUTH :
+      std::cout << "Checking south " << diff << std::endl;
+      if (diff >= -ERROR and diff <= +ERROR) {
+        ROS_INFO ("Now I'm straight to the North!");
+        this->state_sts = STOP_SPINNING_SOUTH;
+      }
+      else this->walk.set_steps_size(0.0, 0.0, 0.25*saturate_alpha(diff));
+      break;
+    case STOP_SPINNING_SOUTH :
+      ROS_INFO ("Stop Spinning South...");
+      this->walk.stop();
+      this->state_sts = CHECK_STOP_SPINNING_SOUTH;
+
+      break;
+    case CHECK_STOP_SPINNING_SOUTH :
+      ROS_INFO ("Check Stop Spinning South...");
+      if (this->walk.is_finished()) {
+        this->darwin_state = SCAN_MAZE;
+        this->search_started = false;
+      }
+      else this->walk.stop();
+      break;
+
+  }
 }
 
 double CeabotMazeAlgNode::distance_to_xy (double x, double y) {
