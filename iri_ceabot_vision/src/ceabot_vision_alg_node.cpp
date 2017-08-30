@@ -88,12 +88,7 @@ void CeabotVisionAlgNode::buttons_callback(const humanoid_common_msgs::buttons::
 	this->event_start = true;
     }
   }
-  //use appropiate mutex to shared variables if necessary
-  //this->alg_.lock();
-  //this->buttons_mutex_enter();
-  //unlock previously blocked shared variables
-  //this->alg_.unlock();
-  //this->buttons_mutex_exit();
+  ROS_INFO("CeabotVisionAlgNode::buttons_callback: New Message Received");
 }
 
 void CeabotVisionAlgNode::buttons_mutex_enter(void)

@@ -31,9 +31,11 @@
 #include <humanoid_modules/walk_module.h>
 #include <humanoid_modules/head_tracking_module.h>
 #include <humanoid_modules/action_module.h>
+#include <iri_ros_tools/timeout.h>
+
 
 #define PI 3.1415926535
-#define ERROR 0.085
+#define ERROR 0.12
 
 // [publisher subscriber headers]
 #include <std_msgs/Int8.h>
@@ -47,10 +49,10 @@
 #include <iostream>
 #include <algorithm>
 #include <vector>
+#include <map>
 #include <math.h>
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
-
 
 
 // [service client headers]
@@ -65,8 +67,8 @@
  typedef enum {IDLE,
                SCAN_MAZE,
                WAIT_FOR_SCAN,
+               PROCESS_DATA,
                SEARCH_FOR_GOAL_QR,
-               CALCULATE_DENSITY,
                FIND_HOLES,
                CALCULATE_MOVEMENT,
                MOVEMENT_ALPHA,
@@ -76,8 +78,10 @@
                FALLEN_DARWIN,
                IS_DARWIN_STANDING,
                CHECK_NORTH,
-               SPIN,
-               STOP_SPINNING
+               STOP_SPINNING,
+               CHECK_STOP_SPINNING,
+               WAIT,
+               WAIT_TRACKING
                } darwin_states;
 
 struct position {
@@ -93,10 +97,11 @@ struct DDPOINT {
 };
 
 struct qr_info {
-  geometry_msgs::PoseStamped pose;
+  std_msgs::Header header;
   std::string qr_tag; position pos; orientation ori;
 };
 
+typedef std::pair<DDPOINT, double> hole;
 
 class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgorithm>
 {
@@ -179,15 +184,17 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     int    turn_left;
     int    fallen_state;
     int    direction;
-    int way_axis_grow;
+    int    way_zaxis_grow;
+    int    way_xaxis_grow;
     double next_x_mov;
     double next_z_mov;
+    double time_to_wait;
+    CROSTimeout timeout;
     tf::TransformListener listener;
 
-    std::vector<std::pair <int, double> > ocupation;
-    std::vector<std::vector <qr_info> > qr_information;
+    std::map<std::string, std::vector<qr_info> > qr_info_pre_processing;
+    std::vector<qr_info> qr_information;
     std::vector<std::pair <DDPOINT, double> > holes_magn;
-    std::vector < std::vector<std::pair <DDPOINT, double> > > holes_bysektor;
 
     Config config_;
     CWalkModule walk;
@@ -300,12 +307,6 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void search_for_goal_qr (void);
 
-      int actual_zone_to_scan(void);
-
-      void calculate_density(void);
-
-      static bool density_sort(std::pair <int,double> k, std::pair <int,double> l);
-
       static bool distance_sort (qr_info o, qr_info p);
 
       void find_holes(void);
@@ -316,9 +317,9 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       bool is_goal_wall(qr_info* obs);
 
-      void calculate_point_to_move(qr_info* obs1, qr_info* obs2);
+      DDPOINT calculate_point_to_move(qr_info* obs1, qr_info* obs2);
 
-      void get_immediate_obs (int m, int i, qr_info& obs1, qr_info &obs2);
+      void get_immediate_obs (int i, qr_info& obs1, qr_info &obs2);
 
       void fill_PoseStamped (int i, const humanoid_common_msgs::tag_pose_array::ConstPtr &in, geometry_msgs::PoseStamped &out);
 
@@ -326,7 +327,13 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       double distance_to_xy (double x, double y);
 
+      void process_data(void);
+
+      bool ddpoint_goet (DDPOINT a, DDPOINT b, bool n);
+
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
+
+      geometry_msgs::PoseStamped get_PoseStamped (qr_info* obs1);
     // [diagnostic functions]
 
     // [test functions]
