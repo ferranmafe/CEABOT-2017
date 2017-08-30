@@ -143,7 +143,7 @@ void CeabotVisionAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
   //this->alg_.unlock();
-  //this->odom_mutex_exit(); 
+  //this->odom_mutex_exit();
 }
 
 void CeabotVisionAlgNode::odom_mutex_enter(void)
@@ -226,6 +226,7 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
             update_pan_and_tilt();
             this->tracking_module.update_target(this->pan_angle, this->tilt_angle);
             this->darwin_state = FINISHING_QR_SEARCH;
+            this->head_search_started = false;
           }
           else {
 	    std::cout << "Entered else in qr pose callback" << std::endl;
@@ -309,7 +310,7 @@ void CeabotVisionAlgNode::state_machine(void) {
 	ros::Duration(5.0).sleep();
 	this->darwin_state = IDLE;
         break;
-	
+
     case IDLE: //0 ------------------------------------------------------------------------------------------------------------------------------------
       ROS_INFO("Darwin Ceabot Vision : state IDLE");
       //if (this->movement_started) {ros::duration.sleep(0.1); this->movement_started = false;} //We wait to get the correct QR...
@@ -409,7 +410,7 @@ void CeabotVisionAlgNode::state_machine(void) {
     }
 
     case WAIT_STOP_WALKING:
-	
+
       ROS_INFO("Darwin Ceabot Vision : state WAIT_STOP_WALKING");
       if (this->walk.is_finished() and this->walk.get_status() == walk_module_status_t(WALK_MODULE_SUCCESS)) { //If we finished waliing successfully!
         this->movement_started = false;
