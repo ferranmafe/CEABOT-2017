@@ -32,7 +32,7 @@
 #include <humanoid_modules/head_tracking_module.h>
 #define PI 3.1415926535
 #define GRADIENT 0.159154943
-#define ERROR 0.085
+#define ERROR 0.226
 
 // [publisher subscriber headers]
 #include <dynamic_reconfigure/Config.h>
@@ -40,6 +40,7 @@
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/JointState.h>
 #include <humanoid_common_msgs/tag_pose_array.h>
+#include <humanoid_common_msgs/buttons.h>
 #include <string>
 #include <set>
 #include <math.h>
@@ -53,7 +54,8 @@
  *
  */
 
- typedef enum {IDLE,
+ typedef enum {START,
+	       IDLE,
                SEARCH_QR,
                WAIT_SEARCH,
                MOVEMENT,
@@ -73,7 +75,7 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
 
     // [subscriber attributes]
     ros::Subscriber buttons_subscriber_;
-    void buttons_callback(const dynamic_reconfigure::Config::ConstPtr& msg);
+    void buttons_callback(const humanoid_common_msgs::buttons::ConstPtr& msg);
     pthread_mutex_t buttons_mutex_;
     void buttons_mutex_enter(void);
     void buttons_mutex_exit(void);
@@ -115,6 +117,8 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
     * This variable has all the driver parameters defined in the cfg config file.
     * Is updated everytime function config_update() is called.
     */
+
+    
 
     //double concerning to the Yaw of Darwin
     double bno055_measurement;

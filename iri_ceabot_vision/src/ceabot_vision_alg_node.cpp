@@ -70,7 +70,7 @@ void CeabotVisionAlgNode::mainNodeThread(void) {
 
   //State Machine. After the start the idea is to iterate between the different states
   //SEARCH_QR -> DECODE_QR -> MOVEMENT -> MOVEMENT_ERROR_COMPROBATION -> SEARCH_QR
-
+  //this->event_start = true;
 
   if (this->event_start) {
     state_machine();
@@ -78,39 +78,19 @@ void CeabotVisionAlgNode::mainNodeThread(void) {
 }
 
 /*  [subscriber callbacks] */
-void CeabotVisionAlgNode::buttons_callback(const dynamic_reconfigure::Config::ConstPtr& msg)
+void CeabotVisionAlgNode::buttons_callback(const humanoid_common_msgs::buttons::ConstPtr& msg)
 {
-  //ROS_INFO("CeabotVisionAlgNode::buttons_callback: New Message Received");
-
+  for (int i = 0; i < msg->name.size(); ++i) {
+    if (msg->name[i] == "start" && msg->state[i] == true) {
+	this->darwin_state = START;
+	init_walk_module();
+	init_headt_module();
+	this->event_start = true;
+    }
+  }
   //use appropiate mutex to shared variables if necessary
   //this->alg_.lock();
   //this->buttons_mutex_enter();
-  bool value = false;
-  for (int k = 0; k < msg->bools.size(); ++k) {
-    if (msg->bools[k].name == "start_button" and msg->bools[k].value) value = true;
-  }
-  if (value and !this->event_start) {
-    std::cout << "Event Started!" << std::endl;
-    //Code for the start. It sets all the configuration from the .cfg to the modules.
-    //Then, waits for 5 sec (start condition - read CEABOT rules) and change the Darwin
-    //state to start searching for the first QR code
-    //Initialization of Darwin parameters
-    init_walk_module();
-    init_headt_module();
-
-    //5 sec sleep. It's for the init of the event, the rules says that Darwin must
-    //wait this amount of time in seconds
-    ros::Duration(5.0).sleep();
-
-    //Change of Darwin State to start searching for the first QR
-    //this->darwin_state = SEARCH_QR;
-    //this->darwin_state = darwin_states(config_.darwin_st);
-
-    //We must set down the start flag in terms of dont enter to this condition again
-    this->event_start = true;
-    this->darwin_state = IDLE;
-  }
-  //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
   //this->alg_.unlock();
   //this->buttons_mutex_exit();
@@ -168,7 +148,7 @@ void CeabotVisionAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
   //this->alg_.unlock();
-  //this->odom_mutex_exit();
+  //this->odom_mutex_exit(); 
 }
 
 void CeabotVisionAlgNode::odom_mutex_enter(void)
@@ -245,22 +225,24 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
           std::cout << "FINAL TAG ID: " << next_qr_to_go.tag_id << std::endl;
 
           this->old_goal_bno = aux_old_goal_bno;
-          if (head_search_started) {
-            head_state = 0;
+          if (this->head_search_started) {
+	    std::cout << "Entered if in qr pose callback" << std::endl;
+            this->head_state = 0;
             update_pan_and_tilt();
             this->tracking_module.update_target(this->pan_angle, this->tilt_angle);
-            darwin_state = FINISHING_QR_SEARCH;
+            this->darwin_state = FINISHING_QR_SEARCH;
           }
           else {
-            darwin_state = MOVEMENT;
+	    std::cout << "Entered else in qr pose callback" << std::endl;
+            this->darwin_state = MOVEMENT;
           }
       }
       else {
-        if (!head_search_started) {
-          head_state = 1;
+        if (!this->head_search_started) {
+          this->head_state = 1;
           update_pan_and_tilt();
         }
-        darwin_state = SEARCH_QR;
+        this->darwin_state = SEARCH_QR;
       }
     }
   this->qr_pose_mutex_exit();
@@ -328,20 +310,25 @@ void CeabotVisionAlgNode::init_headt_module(void) {
 void CeabotVisionAlgNode::state_machine(void) {
   switch(this->darwin_state) {
     //Case of no movement and no scanning
+    case START:
+	ros::Duration(5.0).sleep();
+	this->darwin_state = IDLE;
+        break;
+	
     case IDLE: //0 ------------------------------------------------------------------------------------------------------------------------------------
-      //ROS_INFO("Darwin Ceabot Vision : state IDLE");
+      ROS_INFO("Darwin Ceabot Vision : state IDLE");
       //if (this->movement_started) {ros::duration.sleep(0.1); this->movement_started = false;} //We wait to get the correct QR...
       //this->darwin_state = MOVEMENT;
 
       break;
     case SEARCH_QR: //1 -------------------------------------------------------------------------------------------------------------------------------
-      if (!head_search_started) {
+      if (!this->head_search_started) {
         ROS_INFO("HEY, I JUST STARTED SEARCHING!!");
         this->tracking_module.start_tracking(this->pan_angle,this->tilt_angle);
         this->head_search_started=true;
       }
       else this->tracking_module.update_target(this->pan_angle,this->tilt_angle);
-      darwin_state = WAIT_SEARCH;
+      this->darwin_state = WAIT_SEARCH;
       break;
 
     case WAIT_SEARCH:
@@ -349,18 +336,21 @@ void CeabotVisionAlgNode::state_machine(void) {
         if (this->current_pan_angle >= (this->pan_angle - ERROR) and this->current_pan_angle <= (this->pan_angle + ERROR)) {
             if (this->current_tilt_angle >= (this->tilt_angle - ERROR) and this->current_tilt_angle <= (this->tilt_angle + ERROR)){
                 ROS_INFO("GOAL ACHIEVED");
-                ++head_state;
-                if (head_state <= 4) update_pan_and_tilt();
-                else darwin_state = END;
-                darwin_state = IDLE;
+                ++this->head_state;
+                if (head_state <= 4) {
+		    update_pan_and_tilt();
+		    this->darwin_state = IDLE;
+                }
+                else this->darwin_state = END;
             }
         }
         break;
 
     case FINISHING_QR_SEARCH:
-        if (this->current_pan_angle >= (this->pan_angle - ERROR) and this->current_pan_angle <= (this->pan_angle + ERROR)) {
+        ROS_INFO("FINISHING QR SEARCH");
+	if (this->current_pan_angle >= (this->pan_angle - ERROR) and this->current_pan_angle <= (this->pan_angle + ERROR)) {
             if (this->current_tilt_angle >= (this->tilt_angle - ERROR) and this->current_tilt_angle <= (this->tilt_angle + ERROR)){
-                darwin_state = MOVEMENT;
+                this->darwin_state = MOVEMENT;
                 tracking_module.stop_tracking();
             }
         }
@@ -369,6 +359,7 @@ void CeabotVisionAlgNode::state_machine(void) {
     case MOVEMENT: //2 ----------------------------------------------------------------------------------------------------------------------------------
       //Only enter to this if-condition in the first iteration of the mainNodeThread in
       //MOVEMENT case
+      ROS_INFO("MOVEMENT STARTED");
       if (!this->movement_started) {
         //ROS_INFO("Darwin Ceabot Vision : state MOVEMENT -> Starting Movement");
         //We have to control manually if the movement is started
@@ -406,6 +397,7 @@ void CeabotVisionAlgNode::state_machine(void) {
     //movement correctly
     case CHECK_GOAL: {//3 ------------------------------------------------------------------------------------------------------------------
       //ROS_INFO("Darwin Ceabot Vision : state CHECK_GOAL");
+      ROS_INFO("CHECKING GOAL");
       double diff = fabs(this->goal - (this->bno055_measurement));
 
       if (diff >= -(this->config_.ERROR_PERMES) and diff <= this->config_.ERROR_PERMES) {
@@ -422,7 +414,8 @@ void CeabotVisionAlgNode::state_machine(void) {
     }
 
     case WAIT_STOP_WALKING:
-      //ROS_INFO("Darwin Ceabot Vision : state WAIT_STOP_WALKING");
+	
+      ROS_INFO("Darwin Ceabot Vision : state WAIT_STOP_WALKING");
       if (this->walk.is_finished() and this->walk.get_status() == walk_module_status_t(WALK_MODULE_SUCCESS)) { //If we finished waliing successfully!
         this->movement_started = false;
         this->darwin_state = IDLE;
@@ -491,12 +484,12 @@ double CeabotVisionAlgNode::saturate (double alpha) {
     MAX_LOWER_LIMIT
     MIN_LOWER_LIMIT
    */
-  //std::cout << "pre:ALpha: " << alpha << std::endl;
+  std::cout << "pre:ALpha: " << alpha << std::endl;
   if (alpha >= this->config_.MAX_UPPER_LIMIT) alpha = this->config_.MAX_UPPER_LIMIT;
   else if (alpha <= this->config_.MIN_UPPER_LIMIT and alpha >= this->config_.MIN_LOWER_LIMIT and alpha > 0) alpha = this->config_.MIN_UPPER_LIMIT;
   else if (alpha <= this->config_.MIN_UPPER_LIMIT and alpha >= this->config_.MIN_LOWER_LIMIT and alpha < 0) alpha = this->config_.MIN_LOWER_LIMIT;
   else if (alpha <= this->config_.MAX_LOWER_LIMIT) alpha = this->config_.MAX_LOWER_LIMIT;
-  //std::cout << "La saturacion nos da:: " << alpha << ' ' << std::endl;
+  std::cout << "La saturacion nos da:: " << alpha << ' ' << std::endl;
   return alpha;
 }
 
@@ -565,12 +558,12 @@ void CeabotVisionAlgNode::update_pan_and_tilt(void) {
         break;
 
     case 3:
-        this->pan_angle = PI / 8;
+        this->pan_angle = PI / 6;
         this->tilt_angle = PI / 4;
         break;
 
     case 4:
-        this->pan_angle = - PI / 8;
+        this->pan_angle = - PI / 6;
         this->tilt_angle = PI / 4;
         break;
   }
