@@ -84,7 +84,9 @@
                STOP_SPINNING_SOUTH,
                CHECK_STOP_SPINNING_SOUTH,
                WAIT,
-               WAIT_TRACKING
+               WAIT_TRACKING,
+               TURN_TO_SOUTH,
+               TURN_TO_NORTH
                } darwin_states;
 
 struct position {
@@ -337,6 +339,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       void process_data(void);
 
       bool ddpoint_goet (DDPOINT a, DDPOINT b, bool n);
+
+      bool wall_too_far (qr_info wall, qr_info obs);
 
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
 
