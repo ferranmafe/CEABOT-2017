@@ -70,6 +70,8 @@
                PROCESS_DATA,
                SEARCH_FOR_GOAL_QR,
                CALCULATE_MOVEMENT_FOR_GOAL_QR,
+               MOVEMENT_ALPHA_FOR_GOAL_QR,
+               CHECK_ALPHA_GOAL_MFGQR,
                MOVEMENT_X_FOR_GOAL_QR,
                CHECK_GOAL_MFGQR,
                STRAIGHT_FORWARD,
@@ -341,9 +343,9 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void fill_PoseStamped (const humanoid_common_msgs::tag_pose &in, geometry_msgs::PoseStamped &out);
 
-      void straight_to_north ();
+      bool straight_to_north ();
 
-      void straight_to_south ();
+      bool straight_to_south ();
 
       double distance_to_xy (double x, double y);
 
@@ -358,6 +360,10 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       geometry_msgs::PoseStamped get_PoseStamped (qr_info* obs1);
 
       void calculate_movement_for_goal_qr ();
+
+      void movement_alpha_for_goal_qr ();
+
+      void check_alpha_goal_mfgqr ();
 
       void movement_x_for_goal_qr ();
 

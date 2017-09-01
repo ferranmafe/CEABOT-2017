@@ -35,7 +35,7 @@
         <param name="STEP_FB_RATIO"       value="0.28"/>
         <param name="FOOT_HEIGHT"         value="0.04"/>
         <param name="MAX_VEL"             value="0.1"/>
-        <param name="MAX_ROT_VEL"         value="0.1"/>
+        <param name="MAX_ROT_VEL"         value="0.2"/>
         <param name="darwin_st"           value="0"/>
 
         <!--Walk remaps-->
