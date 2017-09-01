@@ -69,6 +69,13 @@
                WAIT_FOR_SCAN,
                PROCESS_DATA,
                SEARCH_FOR_GOAL_QR,
+               CALCULATE_MOVEMENT_FOR_GOAL_QR,
+               MOVEMENT_ALPHA_FOR_GOAL_QR,
+               CHECK_ALPHA_GOAL_MFGQR,
+               MOVEMENT_X_FOR_GOAL_QR,
+               CHECK_GOAL_MFGQR,
+               STRAIGHT_FORWARD,
+               CHECK_STRAIGHT_FORWARD,
                FIND_HOLES,
                CALCULATE_MOVEMENT,
                MOVEMENT_ALPHA,
@@ -195,7 +202,13 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     int    way_xaxis_grow;
     double next_x_mov;
     double next_z_mov;
+    double ini_x;
+    double ini_z;
     double time_to_wait;
+    int    goalqr_vecpos;
+    double goalqr_x;
+    double goalqr_z;
+    double str_forward_dis;
     CROSTimeout timeout;
     tf::TransformListener listener;
 
@@ -328,11 +341,11 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
 
       void get_immediate_obs (int i, qr_info& obs1, qr_info &obs2);
 
-      void fill_PoseStamped (int i, const humanoid_common_msgs::tag_pose_array::ConstPtr &in, geometry_msgs::PoseStamped &out);
+      void fill_PoseStamped (const humanoid_common_msgs::tag_pose &in, geometry_msgs::PoseStamped &out);
 
-      void straight_to_north ();
+      bool straight_to_north ();
 
-      void straight_to_south ();
+      bool straight_to_south ();
 
       double distance_to_xy (double x, double y);
 
@@ -345,6 +358,21 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
 
       geometry_msgs::PoseStamped get_PoseStamped (qr_info* obs1);
+
+      void calculate_movement_for_goal_qr ();
+
+      void movement_alpha_for_goal_qr ();
+
+      void check_alpha_goal_mfgqr ();
+
+      void movement_x_for_goal_qr ();
+
+      void check_goal_mfgqr ();
+
+      void straight_forward ();
+
+      void check_straight_forward();
+
     // [diagnostic functions]
 
     // [test functions]
