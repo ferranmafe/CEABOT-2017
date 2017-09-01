@@ -13,6 +13,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   this->state_stn = CHECK_NORTH;
   this->state_sts = CHECK_SOUTH;
   this->first_bno_lecture = true;
+  this->first_lecture = true;
   this->half_maze_achieved = false;
   this->next_x_mov = 0.0;
   this->next_z_mov = 0.0;
@@ -27,6 +28,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   this->goalqr_vecpos = 0;
   this->goalqr_x = 0.0;
   this->goalqr_z = 0.0;
+  this->times_timedout = 0;
   this->str_forward_dis = 0.0;
 
   // [init publishers]
@@ -49,6 +51,8 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   // [init services]
 
   // [init clients]
+  set_qr_size_client_ = this->public_node_handle_.serviceClient<humanoid_common_msgs::set_qr_size>("set_qr_size");
+
 
   // [init action servers]
 
@@ -68,6 +72,18 @@ void CeabotMazeAlgNode::mainNodeThread(void){
   // [fill msg structures]
 
   // [fill srv structure and make request to the server]
+  //set_qr_size_srv_.request.data = my_var;
+  //ROS_INFO("CeabotMazeAlgNode:: Sending New Request!");
+  //if (set_qr_size_client_.call(set_qr_size_srv_))
+  //{
+    //ROS_INFO("CeabotMazeAlgNode:: Response: %s", set_qr_size_srv_.response.result);
+  //}
+  //else
+  //{
+    //ROS_INFO("CeabotMazeAlgNode:: Failed to Call Server on topic set_qr_size ");
+  //}
+
+
 
   // [fill action structure and make request to the action server]
 
@@ -78,6 +94,8 @@ void CeabotMazeAlgNode::mainNodeThread(void){
 
     if (this->half_maze_achieved) {this->way_zaxis_grow = 1.0; this->way_xaxis_grow = 1.0;}
     else {this->way_zaxis_grow = -1.0; this->way_xaxis_grow = -1.0;}
+
+          std::cout << "searching for qr: " << this->searching_for_qr << std::endl;
 
     std::cout << "half_maze_achieved == " << half_maze_achieved << std::endl;
     /*std::cout << "way_xaxis_grow : " << this->way_xaxis_grow << std::endl;
@@ -191,7 +209,7 @@ void CeabotMazeAlgNode::odom_mutex_exit(void) {
 void CeabotMazeAlgNode::joint_states_callback(const sensor_msgs::JointState::ConstPtr& msg) {
   unsigned int i;
 
-  //use appropiate mutex to shared variables if necessary
+  //use appropiate mutex to shared variables if necessary0.500289
   //this->alg_.lock();
   this->joint_states_mutex_enter();
 
@@ -218,40 +236,63 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
-
+  bool get_wall_qr = true;
+  std::cout << this->times_timedout << " timedout.." << std::endl;
   if (msg->tags.size()>0) {
     if (this->searching_for_qr) {
-      for (int i = 0; i < msg->tags.size(); ++i) {
-        bool ready_to_transform = false;
-
-        geometry_msgs::PoseStamped transformed_pose;
-        geometry_msgs::PoseStamped pose;
-
-        fill_PoseStamped(msg->tags[i], pose);
-        //std::cout << msg->tags[i].header.frame_id << std::endl;
-        ready_to_transform = listener.waitForTransform("darwin/base_link", msg->tags[i].header.frame_id , msg->tags[i].header.stamp, ros::Duration(0.3), ros::Duration(0.08333));
-        //std::cout << "ready_to_transform??: " << ready_to_transform << std::endl;
-        if (ready_to_transform) {
-          listener.transformPose("darwin/base_link", pose, transformed_pose);
-
-          qr_info aux;
-          aux.header = msg->tags[i].header;
-          aux.qr_tag = msg->tags[i].tag_id;
-
-          aux.pos.x = transformed_pose.pose.position.x; aux.pos.y = transformed_pose.pose.position.y; aux.pos.z = transformed_pose.pose.position.z;
-          aux.ori.x = transformed_pose.pose.orientation.x; aux.ori.y = transformed_pose.pose.orientation.y; aux.ori.z = transformed_pose.pose.orientation.z; aux.ori.w = transformed_pose.pose.orientation.w;
-
-          std::cout << std::endl;
-          std::cout << "Tag ID: " << msg->tags[i].tag_id << std::endl;
-          std::cout << "Frame_id: " << msg->tags[i].header.frame_id << std::endl;
-          std::cout <<  "Old X pos: " << msg->tags[i].position.x << " Old Y pos: " << msg->tags[i].position.y << " Old Z pos: " <<  msg->tags[i].position.z << std::endl;
-          std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
-          std::cout << std::endl;
-
-          this->qr_info_pre_processing[aux.qr_tag].push_back(aux);
-        }
+      if (this->times_timedout == 0) {
+        get_wall_qr = true;
+        set_qr_size_srv_.request.qr_x = 0.172;
+        set_qr_size_srv_.request.qr_y = 0.172;
+        set_qr_size_client_.call(set_qr_size_srv_);
       }
-      //std::sort(vec_aux.begin(), vec_aux.end(), distance_sort);
+      else if (this->times_timedout == 1) {
+        get_wall_qr = false;
+        set_qr_size_srv_.request.qr_x = 0.077;
+        set_qr_size_srv_.request.qr_y = 0.077;
+        set_qr_size_client_.call(set_qr_size_srv_);
+      }
+      std::cout << "FIRST LECTURE: " << this->first_lecture << std::endl;
+      if (not this->first_lecture) {
+        for (int i = 0; i < msg->tags.size(); ++i) {
+            bool ready_to_transform = false;
+
+            geometry_msgs::PoseStamped transformed_pose;
+            geometry_msgs::PoseStamped pose;
+
+            fill_PoseStamped(msg->tags[i], pose);
+            //std::cout << msg->tags[i].header.frame_id << std::endl;
+            this->qr_pose_mutex_exit();
+            ready_to_transform = listener.waitForTransform("darwin/base_link", msg->tags[i].header.frame_id , msg->tags[i].header.stamp, ros::Duration(0.3), ros::Duration(0.08333));
+            this->qr_pose_mutex_enter();
+            //std::cout << "ready_to_transform??: " << ready_to_transform << std::endl;
+            if (ready_to_transform) {
+
+              this->qr_pose_mutex_exit();
+              listener.transformPose("darwin/base_link", pose, transformed_pose);
+              this->qr_pose_mutex_enter();
+
+              qr_info aux;
+              aux.header = msg->tags[i].header;
+              aux.qr_tag = msg->tags[i].tag_id;
+
+              aux.pos.x = transformed_pose.pose.position.x; aux.pos.y = transformed_pose.pose.position.y; aux.pos.z = transformed_pose.pose.position.z;
+              aux.ori.x = transformed_pose.pose.orientation.x; aux.ori.y = transformed_pose.pose.orientation.y; aux.ori.z = transformed_pose.pose.orientation.z; aux.ori.w = transformed_pose.pose.orientation.w;
+
+              std::cout << std::endl;
+              std::cout << "Tag ID: " << msg->tags[i].tag_id << std::endl;
+              std::cout << "Frame_id: " << msg->tags[i].header.frame_id << std::endl;
+              std::cout <<  "Old X pos: " << msg->tags[i].position.x << " Old Y pos: " << msg->tags[i].position.y << " Old Z pos: " <<  msg->tags[i].position.z << std::endl;
+              std::cout << "New X pos: " << aux.pos.x << " New Y pos: " << aux.pos.y << " New Z pos: " << aux.pos.z << std::endl;
+              std::cout << std::endl;
+
+              if (get_wall_qr and is_wall(&aux)) this->qr_info_pre_processing[aux.qr_tag].push_back(aux);
+              else if (not get_wall_qr and not is_wall (&aux)) this->qr_info_pre_processing[aux.qr_tag].push_back(aux);
+            }
+        }
+        //std::sort(vec_aux.begin(), vec_aux.end(), distance_sort);
+      }
+      else this->first_lecture = false;
     }
   }
 
@@ -345,12 +386,9 @@ void CeabotMazeAlgNode::wait_for_scan(void) {
       }
       if (this->direction == -1 or (aux_pan >= (-PI/2.0 - ERROR) and aux_pan <= (-PI/2.0 + ERROR))) {
         //std::cout << "wait for scan entro" << std::endl;
-        this->searching_for_qr = true;
-        this->time_to_wait = 2.0;
-        this->timeout.start(ros::Duration(this->time_to_wait)); //Start a time out and go to wait
-        this->darwin_state = WAIT;
+        this->darwin_state = START_WAITING;
       }
-      if (this->darwin_state != WAIT) this->darwin_state = SCAN_MAZE;
+      if (this->darwin_state != START_WAITING) this->darwin_state = SCAN_MAZE;
     }
     if (this->current_angle_travelled == DegtoRad(360.0)) {
       if (this->tracking_module.is_finished()) {
@@ -543,15 +581,34 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
       }*/
       break;
 
-    case WAIT :
-      ROS_INFO("Waiting...");
-      if (this->timeout.timed_out()) {
-        this->timeout.stop();
-        this->searching_for_qr = false;
-        this->darwin_state = SCAN_MAZE;
+    case START_WAITING :
+      ROS_INFO("Start Waiting...");
+      if (this->times_timedout == 0 and this->timeout.timed_out()) {
+        this->time_to_wait = 2.0;
+        this->timeout.start(ros::Duration(this->time_to_wait)); //Start a time out and go to wait
+        this->searching_for_qr = true;
+        ++this->times_timedout;
+      }
+      else if (this->timeout.timed_out()) {
+         this->timeout.stop();
+         this->first_lecture = true;
+         this->darwin_state = WAIT;
       }
       break;
-
+    case WAIT :
+      ROS_INFO("Waiting...");
+      if (this->times_timedout == 2) {
+        this->timeout.stop();
+        this->darwin_state = SCAN_MAZE;
+        this->times_timedout = 0;
+      }
+      else if (this->times_timedout == 1) {
+        this->time_to_wait = 2.0;
+        this->timeout.start(ros::Duration(this->time_to_wait)); //Start a time out and go to wait
+        this->first_lecture = true;
+        this->darwin_state = START_WAITING;
+      }
+      break;
     case WAIT_TRACKING :
       ROS_INFO("Waiting to stop Tracking...");
       if (this->tracking_module.is_finished()) this->darwin_state = SCAN_MAZE;

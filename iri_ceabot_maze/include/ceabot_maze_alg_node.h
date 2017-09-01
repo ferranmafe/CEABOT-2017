@@ -56,6 +56,7 @@
 
 
 // [service client headers]
+#include <humanoid_common_msgs/set_qr_size.h>
 
 // [action server client headers]
 
@@ -90,6 +91,7 @@
                CHECK_SOUTH,
                STOP_SPINNING_SOUTH,
                CHECK_STOP_SPINNING_SOUTH,
+               START_WAITING,
                WAIT,
                WAIT_TRACKING,
                TURN_TO_SOUTH,
@@ -153,6 +155,9 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     // [service attributes]
 
     // [client attributes]
+    ros::ServiceClient set_qr_size_client_;
+    humanoid_common_msgs::set_qr_size set_qr_size_srv_;
+
 
     // [action server attributes]
 
@@ -175,6 +180,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     bool searching_for_qr;
     bool wall_qr_goal_found;
     bool first_bno_lecture;
+    bool first_lecture;
 
     double pan_angle;
     double goal_x;
@@ -200,6 +206,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     int    direction;
     int    way_zaxis_grow;
     int    way_xaxis_grow;
+    int times_timedout;
     double next_x_mov;
     double next_z_mov;
     double ini_x;

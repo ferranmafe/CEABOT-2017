@@ -83,7 +83,10 @@
 
        <!-- Odometry remaps -->
         <remap from="/darwin/iri_ceabot_maze/odom"
-              to="/darwin/robot/odom"/>
+               to="/darwin/robot/odom"/>
+       <!-- Qr detector service remaps -->
+       <remap from="/darwin/iri_ceabot_maze/set_qr_size"
+              to="/darwin/qr_detector/set_qr_size"/>
 
   </node>
 
