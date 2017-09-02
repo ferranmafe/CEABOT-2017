@@ -39,7 +39,9 @@
 
 #define PI 3.1415926535
 #define ERROR 0.12
-#define ERROR_BACK 0.02
+#define ERROR_PHASE_2 0.1
+#define ERROR_GO_BACK 0.01
+#define ERROR_TURN 0.01
 
 // [publisher subscriber headers]
 #include <humanoid_common_msgs/ir_foot_data.h>
@@ -66,11 +68,16 @@
                COMPLETE_CLIMBING_STAIR,
                START_WALKING_PHASE_2,
                CHECK_WALKING_DIRECTION_PHASE_2,
-               STOP_WALKING_PHASE_2,
+               START_WALKING_PHASE_3,
+               CHECK_WALKING_DIRECTION_PHASE_3,
+               STOP_WALKING_PHASE_3,
                CHECK_POSITION_FOR_DOWN_STAIR,
-               GO_BACK,
+               START_GO_BACK,
                CHECK_GO_BACK,
-               STOP_GO_BACK,
+               FINISH_GO_BACK,
+               START_ANGLE_CORRECTION,
+               CHECK_ANGLE_CORRECTION,
+               FINISH_ANGLE_CORRECTION,
                DOWN_STAIR,
                COMPLETE_DOWN_STAIR,
                FINISH
@@ -130,8 +137,14 @@ class CeabotStairsAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotStairs
     double straight_forward_direction;
     double odom_x;
     double odom_y;
+    double initial_x_phase_2;
+    double initial_y_phase_2;
+    double initial_x_phase_3;
+    double initial_y_phase_3;
     double initial_x_go_back;
     double initial_y_go_back;
+    double initial_angle_to_correct;
+    double turn_direction;
 
     std::map<std::string, bool> left_foot;
     std::map<std::string, bool> right_foot;
@@ -216,15 +229,25 @@ class CeabotStairsAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotStairs
 
     void check_walking_direction_phase_2(void);
 
-    void stop_walking_phase_2(void);
+    void start_walking_phase_3(void);
+
+    void check_walking_direction_phase_3(void);
+
+    void stop_walking_phase_3(void);
 
     void check_position_for_down_stair(void);
 
-    void go_back(void);
+    void start_go_back(void);
 
     void check_go_back(void);
 
-    void stop_go_back(void);
+    void finish_go_back(void);
+
+    void start_angle_correction(void);
+
+    void check_angle_correction(void);
+
+    void finish_angle_correction(void);
 
     void down_stair(void);
 

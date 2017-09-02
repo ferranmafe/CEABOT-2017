@@ -190,9 +190,19 @@ void CeabotStairsAlgNode::state_machine(void) {
       check_walking_direction_phase_2();
       break;
 
-    case STOP_WALKING_PHASE_2:
-      ROS_INFO("STOP WALKING PHASE 2 STATE");
-      stop_walking_phase_2();
+    case START_WALKING_PHASE_3:
+      ROS_INFO("START WALKING PHASE 3 STATE");
+      start_walking_phase_3();
+      break;
+
+    case CHECK_WALKING_DIRECTION_PHASE_3:
+      ROS_INFO("CHECK WALKING DIRECTION PHASE 3 STATE");
+      check_walking_direction_phase_3();
+      break;
+
+    case STOP_WALKING_PHASE_3:
+      ROS_INFO("STOP WALKING PHASE 3 STATE");
+      stop_walking_phase_3();
       break;
 
     case CHECK_POSITION_FOR_DOWN_STAIR:
@@ -200,9 +210,9 @@ void CeabotStairsAlgNode::state_machine(void) {
       check_position_for_down_stair();
       break;
 
-    case GO_BACK:
-      ROS_INFO("GO_BACK STATE");
-      go_back();
+    case START_GO_BACK:
+      ROS_INFO("START GO BACK STATE");
+      start_go_back();
       break;
 
     case CHECK_GO_BACK:
@@ -210,9 +220,24 @@ void CeabotStairsAlgNode::state_machine(void) {
       check_go_back();
       break;
 
-    case STOP_GO_BACK:
-      ROS_INFO("STOP GO BACK STATE");
-      stop_go_back();
+    case FINISH_GO_BACK:
+      ROS_INFO("FINISH GO BACK STATE");
+      finish_go_back();
+      break;
+
+    case START_ANGLE_CORRECTION:
+      ROS_INFO("START ANGLE CORRECTION STATE");
+      start_angle_correction();
+      break;
+
+    case CHECK_ANGLE_CORRECTION:
+      ROS_INFO("CHECK ANGLE CORRECTION STATE");
+      check_angle_correction();
+      break;
+
+    case FINISH_ANGLE_CORRECTION:
+      ROS_INFO("FINISH ANGLE CORRECTION");
+      finish_angle_correction();
       break;
 
     case DOWN_STAIR:
@@ -249,6 +274,7 @@ void CeabotStairsAlgNode::wait_start_time(void) {
 
 void CeabotStairsAlgNode::start_walking_phase_1(void){
   this->walk.set_steps_size(this->config_.x_step, 0.0, 0.0);
+  this->walk.set_steps_size(0.0, 0.0, 0.0);
   this->darwin_state = CHECK_WALKING_DIRECTION_PHASE_1;
 }
 
@@ -282,22 +308,52 @@ void CeabotStairsAlgNode::complete_climbing_stair(void) {
 }
 
 void CeabotStairsAlgNode::start_walking_phase_2(void) {
-  this->walk.set_steps_size(this->config_.x_step, 0.0, 0.0);
+  this->initial_x_phase_2 = this->odom_x;
+  this->initial_y_phase_2 = this->odom_y;
+  this->walk.set_steps_size(0.01, 0.0, 0.0);
   this->darwin_state = CHECK_WALKING_DIRECTION_PHASE_2;
 }
 
 void CeabotStairsAlgNode::check_walking_direction_phase_2(void) {
   double angle_diff = this->straight_forward_direction - this->bno055_measurement;
-  this->walk.set_steps_size(this->config_.x_step, 0.0, saturate_angle(angle_diff));
+  this->walk.set_steps_size(0.01, 0.0, saturate_angle(angle_diff));
 
-  if ((this->left_foot["down_left_front"] && this->left_foot["down_right_front"]) && (this->right_foot["down_left_front"] && this->right_foot["down_right_front"])) {
-    if ((this->left_foot["down_left_middle"] || this->left_foot["down_right_middle"]) && (this->right_foot["down_left_middle"] || this->right_foot["down_right_middle"])) {
-      this->darwin_state = STOP_WALKING_PHASE_2;
-    }
+  double distance = sqrt(pow(this->initial_x_phase_2 - this->odom_x,2) + pow(this->initial_y_phase_2 - this->odom_y,2));
+  std::cout << "Distance to goal: " << distance << std::endl;
+  if (distance >= 0.4 - ERROR_PHASE_2) {
+    this->darwin_state = START_WALKING_PHASE_3;
   }
 }
 
-void CeabotStairsAlgNode::stop_walking_phase_2(void) {
+void CeabotStairsAlgNode::start_walking_phase_3(void) {
+  this->initial_x_phase_3 = this->odom_x;
+  this->initial_y_phase_3 = this->odom_y;
+  double angle_diff = this->straight_forward_direction - this->bno055_measurement;
+  this->walk.set_steps_size(this->config_.x_step2, 0.0, saturate_angle(angle_diff));
+  this->darwin_state = CHECK_WALKING_DIRECTION_PHASE_3;
+
+  /*double angle_diff = this->straight_forward_direction - this->bno055_measurement;
+  this->walk.set_steps_size(this->config_.x_step2, 0.0, saturate_angle(angle_diff));
+  this->darwin_state = CHECK_WALKING_DIRECTION_PHASE_3;*/
+}
+
+void CeabotStairsAlgNode::check_walking_direction_phase_3(void) {
+  double angle_diff = this->straight_forward_direction - this->bno055_measurement;
+  this->walk.set_steps_size(this->config_.x_step2, 0.0, saturate_angle(angle_diff));
+
+  double distance = sqrt(pow(this->initial_x_phase_3 - this->odom_x,2) + pow(this->initial_y_phase_3 - this->odom_y,2));
+  if (distance >= 0.005 - ERROR_GO_BACK) {
+    this->darwin_state = STOP_WALKING_PHASE_3;
+  }
+  /*double angle_diff = this->straight_forward_direction - this->bno055_measurement;
+  this->walk.set_steps_size(this->config_.x_step2, 0.0, saturate_angle(angle_diff));
+
+  if ((this->left_foot["down_left_front"] && this->left_foot["down_right_front"]) && (this->right_foot["down_left_front"] && this->right_foot["down_right_front"])) {
+    this->darwin_state = STOP_WALKING_PHASE_3;
+  }*/
+}
+
+void CeabotStairsAlgNode::stop_walking_phase_3(void) {
   if (this->walk.is_finished()) {
     this->darwin_state = CHECK_POSITION_FOR_DOWN_STAIR;
   }
@@ -305,41 +361,69 @@ void CeabotStairsAlgNode::stop_walking_phase_2(void) {
 }
 
 void CeabotStairsAlgNode::check_position_for_down_stair(void) {
-  if ((this->left_foot["down_left_front"] && this->left_foot["down_right_front"]) && (this->right_foot["down_left_front"] && this->right_foot["down_right_front"])) {
-    if ((this->left_foot["down_left_middle"] || this->left_foot["down_right_middle"]) && (this->right_foot["down_left_middle"] || this->right_foot["down_right_middle"])) {
-      if (!(this->left_foot["down_left_rear"] || this->left_foot["down_right_rear"] || this->right_foot["down_left_rear"] || this->right_foot["down_right_rear"])) {
-        this->darwin_state = DOWN_STAIR;
-      }
-      else this->darwin_state = GO_BACK;
+    if (this->left_foot["down_left_middle"] || this->left_foot["down_right_middle"] || this->right_foot["down_left_middle"] || this->right_foot["down_right_middle"]) {
+      this->darwin_state = START_GO_BACK;
     }
-    else this->darwin_state = GO_BACK;
-  }
-  else this->darwin_state = GO_BACK;
+    else if (!this->left_foot["down_left_front"] && !this->left_foot["down_right_front"] && !this->right_foot["down_left_front"] && !this->right_foot["down_right_front"]) {
+      this->darwin_state = START_WALKING_PHASE_3;
+    }
+    else if (!this->left_foot["down_left_front"] || !this->left_foot["down_right_front"] || !this->right_foot["down_left_front"] || !this->right_foot["down_right_front"]) {
+      this->darwin_state = START_ANGLE_CORRECTION;
+    }
+    else this->darwin_state = DOWN_STAIR;
 }
 
-void CeabotStairsAlgNode::go_back(void) {
+void CeabotStairsAlgNode::start_go_back(void) {
   this->initial_x_go_back = this->odom_x;
   this->initial_y_go_back = this->odom_y;
-  this->darwin_state = CHECK_GO_BACK;
 
   double angle_diff = this->straight_forward_direction - this->bno055_measurement;
   this->walk.set_steps_size(-this->config_.x_step, 0.0, saturate_angle(angle_diff));
+
+  this->darwin_state = CHECK_GO_BACK;
 }
 
 void CeabotStairsAlgNode::check_go_back(void) {
-  double distance = sqrt(pow(this->initial_x_go_back - this->odom_x, 2) + pow(this->initial_y_go_back - this->odom_y, 2));
-  if (distance >= 0.1 + ERROR_BACK || distance <= 0.1 - ERROR_BACK) {
-    this->darwin_state = STOP_GO_BACK;
-  }
-  else {
-    double angle_diff = this->straight_forward_direction - this->bno055_measurement;
-    this->walk.set_steps_size(-this->config_.x_step, 0.0, saturate_angle(angle_diff));
+  double angle_diff = this->straight_forward_direction - this->bno055_measurement;
+  this->walk.set_steps_size(-this->config_.x_step, 0.0, saturate_angle(angle_diff));
+
+  double distance = sqrt(pow(this->initial_x_go_back - this->odom_x,2) + pow(this->initial_y_go_back - this->odom_y,2));
+  std::cout << "Distance to goal: " << distance << std::endl;
+  if (distance >= 0.07 - ERROR_GO_BACK) {
+    this->darwin_state = CHECK_WALKING_DIRECTION_PHASE_3;
   }
 }
 
-void CeabotStairsAlgNode::stop_go_back(void) {
+void CeabotStairsAlgNode::finish_go_back(void) {
   if (this->walk.is_finished()) {
-    this->darwin_state = START_WALKING_PHASE_2;
+    this->darwin_state = START_WALKING_PHASE_3;
+  }
+  else this->walk.stop();
+}
+
+void CeabotStairsAlgNode::start_angle_correction(void) {
+  this->initial_angle_to_correct = this->bno055_measurement;
+  if (this->left_foot["down_left_front"] &&  !this->right_foot["down_right_front"]) {
+    this->turn_direction = 1.0;
+  }
+  else {
+    this->turn_direction = +1.0;
+  }
+  this->darwin_state = CHECK_ANGLE_CORRECTION;
+}
+
+void CeabotStairsAlgNode::check_angle_correction(void) {
+  double angle_diff = this->initial_angle_to_correct - this->bno055_measurement;
+  std::cout << "Angle turned: " << angle_diff << std::endl;
+  this->walk.set_steps_size(0.0, 0.0, this->turn_direction * 0.04);
+  if (angle_diff >= 0.08 - ERROR_TURN || angle_diff <= -0.08 + ERROR_TURN) {
+    this->darwin_state = FINISH_ANGLE_CORRECTION;
+  }
+}
+
+void CeabotStairsAlgNode::finish_angle_correction(void) {
+  if (this->walk.is_finished()) {
+    this->darwin_state = CHECK_POSITION_FOR_DOWN_STAIR;
   }
   else this->walk.stop();
 }
@@ -352,7 +436,7 @@ void CeabotStairsAlgNode::down_stair(void) {
 void CeabotStairsAlgNode::complete_down_stair(void) {
   if (this->stairs.is_finished()) {
     ++this->stairs_counter;
-    if (this->stairs_counter < 6) this->darwin_state = START_WALKING_PHASE_2;
+    if (this->stairs_counter < 6) this->darwin_state = START_WALKING_PHASE_3;
     else this->darwin_state = FINISH;
   }
 }
@@ -389,12 +473,10 @@ void CeabotStairsAlgNode::init_headt_module(void) {
 }
 
 double CeabotStairsAlgNode::saturate_angle (double alpha) {
-  std::cout << "pre:ALpha: " << alpha << std::endl;
   if (alpha >= this->config_.MAX_UPPER_LIMIT) alpha = this->config_.MAX_UPPER_LIMIT;
   else if (alpha <= this->config_.MIN_UPPER_LIMIT and alpha >= this->config_.MIN_LOWER_LIMIT and alpha > 0) alpha = this->config_.MIN_UPPER_LIMIT;
   else if (alpha <= this->config_.MIN_UPPER_LIMIT and alpha >= this->config_.MIN_LOWER_LIMIT and alpha < 0) alpha = this->config_.MIN_LOWER_LIMIT;
   else if (alpha <= this->config_.MAX_LOWER_LIMIT) alpha = this->config_.MAX_LOWER_LIMIT;
-  std::cout << "La saturacion nos da:: " << alpha << ' ' << std::endl;
   return alpha;
 }
 
