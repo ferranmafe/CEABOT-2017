@@ -1,0 +1,133 @@
+<launch>
+
+  <arg name="robot" default="darwin" />
+
+  <include file="$(find darwin_description)/launch/darwin_base.launch">
+    <arg name="robot" value="$(arg robot)" />
+  </include>
+
+  <include file="$(find darwin_apps)/launch/xs_camera_qr.launch"/>
+
+  <include file="$(find bno055_imu)/launch/darwin_bno055_imu.launch"/>
+
+   <!-- launch the ceabot stairs client node -->
+   <node name="iri_ceabot_stairs"
+         pkg="iri_ceabot_stairs"
+         type="iri_ceabot_stairs"
+         output="screen"
+         ns="/darwin">
+         <!-- Stair params -->
+           <param name="stairs_client/enable_timeout" value="false"/>
+           <param name="SHIFT_WEIGHT_RIGHT_TIME"    value="1.6"/>
+           <param name="RISE_RIGHT_FOOT_TIME"       value="3.2"/>
+           <param name="ADVANCE_RIGHT_FOOT_TIME"    value="4.8"/>
+           <param name="CONTACT_RIGHT_FOOT_TIME"    value="6.4"/>
+           <param name="SHIFT_WEIGHT_RIGHT_TIME"    value="8.0"/>
+           <param name="RISE_LEFT_FOOT_TIME"        value="9.6"/>
+           <param name="ADVANCE_LEFT_FOOT_TIME"     value="11.2"/>
+           <param name="CONTACT_LEFT_FOOT_TIME"     value="12.8"/>
+           <param name="CENTER_WEIGHT_TIME"         value="14.4"/>
+           <param name="X_OFFSET"                   value="-0.01"/>
+           <param name="Y_OFFSET"                   value="0.005"/>
+           <param name="Z_OFFSET"                   value="0.4"/>
+           <param name="R_OFFSET"                   value="0.0"/>
+           <param name="P_OFFSET"                   value="0.0"/>
+           <param name="A_OFFSET"                   value="0.0"/>
+           <param name="Y_SHIFT"                    value="0.04"/>
+           <param name="X_SHIFT"                    value="0.08"/>
+           <param name="Z_OVERSHOOT"                value="0.015"/>
+           <param name="Z_HEIGHT"                   value="0.03"/>
+           <param name="HIP_PITCH_OFFSET"           value="0.23"/>
+           <param name="R_SHIFT"                    value="0.05"/>
+           <param name="P_SHIFT"                    value="0.1"/>
+           <param name="A_SHIFT"                    value="0.3"/>
+           <param name="Y_SPREAD"                   value="0.02"/>
+           <param name="X_SHIFT_BODY"               value="0.035"/>
+
+           <!-- Walk params -->
+           <param name="Y_SWAP_AMPLITUDE"    value="0.020"/>
+           <param name="Z_SWAP_AMPLITUDE"    value="0.005"/>
+           <param name="ARM_SWING_GAIN"      value="1.5"/>
+           <param name="PELVIS_OFFSET"       value="0.05"/>
+           <param name="HIP_PITCH_OFFSET"    value="0.23"/>
+           <param name="PERIOD_TIME"         value="0.6"/>
+           <param name="DSP_RATIO"           value="0.1"/>
+           <param name="STEP_FB_RATIO"       value="0.28"/>
+           <param name="FOOT_HEIGHT"         value="0.03"/>
+           <param name="MAX_VEL"             value="1.0"/>
+           <param name="MAX_ROT_VEL"         value="0.1"/>
+
+           <!-- Headt Params -->
+
+
+           <!--Stair remaps -->
+           <remap from="/darwin/iri_ceabot_stairs/stairs_client/climb_stairs"
+                    to="/darwin/robot/climb_stairs"/>
+           <remap from="/darwin/iri_ceabot_stairs/stairs_client/set_stairs_params"
+                    to="/darwin/robot/set_stairs_params"/>
+           <remap from="/darwin/iri_ceabot_stairs/stairs_client/get_stairs_params"
+                    to="/darwin/robot/get_stairs_params"/>
+           <remap from="/darwin/iri_ceabot_stairs/stairs_client/set_servo_modules"
+                    to="/darwin/robot/set_servo_modules"/>
+           <remap from="/darwin/iri_ceabot_stairs/stairs_client/fallen_state"
+                    to="/darwin/robot/fallen_state"/>
+
+         <!--Walk remaps-->
+         <remap from="/darwin/iri_ceabot_stairs/walk_client/cmd_vel"
+                  to="/darwin/robot/cmd_vel"/>
+         <remap from="/darwin/iri_ceabot_stairs/walk_client/set_walk_params"
+                  to="/darwin/robot/set_walk_params"/>
+         <remap from="/darwin/iri_ceabot_stairs/walk_client/get_walk_params"
+                  to="/darwin/robot/get_walk_params"/>
+         <remap from="/darwin/iri_ceabot_stairs/walk_client/set_servo_modules"
+                  to="/darwin/robot/set_servo_modules"/>
+         <remap from="/darwin/iri_ceabot_stairs/walk_client/joint_states"
+                  to="/darwin/joint_states"/>
+         <remap from="/darwin/iri_ceabot_stairs/fallen_state"
+                  to="/darwin/robot/fallen_state"/>
+
+        <!--Head Tracking remaps-->
+        <remap from="/darwin/iri_ceabot_stairs/headt_client/head_tracking_action"
+                 to="/darwin/robot/head_follow_target"/>
+        <remap from="/darwin/iri_ceabot_stairs/headt_client/head_target"
+                 to="/darwin/robot/head_target"/>
+        <remap from="/darwin/iri_ceabot_stairs/headt_client/set_pan_pid"
+                 to="/darwin/robot/set_pan_pid"/>
+        <remap from="/darwin/iri_ceabot_stairs/headt_client/set_servo_modules"
+                 to="/darwin/robot/set_servo_modules"/>
+        <remap from="/darwin/iri_ceabot_stairs/headt_client/get_pan_pid"
+                 to="/darwin/robot/get_pan_pid"/>
+        <remap from="/darwin/iri_ceabot_stairs/headt_client/set_tilt_pid"
+                 to="/darwin/robot/set_tilt_pid"/>
+        <remap from="/darwin/iri_ceabot_stairs/headt_client/get_tilt_pid"
+                 to="/darwin/robot/get_tilt_pid"/>
+        <remap from="/darwin/iri_ceabot_stairs/joint_states"
+                 to="/darwin/joint_states"/>
+
+        <!-- Action remaps-->
+        <remap from="/darwin/iri_ceabot_stairs/action_client/motion_action"
+                 to="/darwin/robot/motion_action"/>
+        <remap from="/darwin/iri_ceabot_stairs/action_client/set_servo_modules"
+                 to="/darwin/robot/set_servo_modules"/>
+
+        <!-- bno055 remaps -->
+        <remap from="/darwin/iri_ceabot_stairs/imu"
+               to="/darwin/sensors/raw_imu"/>
+
+        <!-- Odometry remaps -->
+         <remap from="/darwin/iri_ceabot_stairs/odom"
+               to="/darwin/robot/odom"/>
+
+        <!--Foot sensor remaps-->
+        <remap from="/darwin/iri_ceabot_stairs/left_foot_data"
+                 to="/darwin/sensors/left_foot_data"/>
+        <remap from="/darwin/iri_ceabot_stairs/right_foot_data"
+                 to="/darwin/sensors/right_foot_data"/>
+
+        <!--Buttons remaps-->
+        <remap from="/darwin/iri_ceabot_stairs/buttons"
+                 to="/darwin/buttons"/>
+
+  </node>
+
+</launch>
