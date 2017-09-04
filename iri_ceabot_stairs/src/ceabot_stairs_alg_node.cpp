@@ -10,6 +10,7 @@ CeabotStairsAlgNode::CeabotStairsAlgNode(void) :
   //init class attributes if necessary
   //this->loop_rate_ = 2;//in [Hz]
   this->first_bno_lecture = false;
+  this->fallen = false;
   this->stairs_counter = 0;
   this->darwin_state = START;
 
@@ -27,6 +28,9 @@ CeabotStairsAlgNode::CeabotStairsAlgNode(void) :
 
   this->odom_subscriber_ = this->public_node_handle_.subscribe("odom", 1, &CeabotStairsAlgNode::odom_callback, this);
   pthread_mutex_init(&this->odom_mutex_,NULL);
+
+  this->fallen_state_subscriber_ = this->public_node_handle_.subscribe("fallen_state", 1, &CeabotStairsAlgNode::fallen_state_callback, this);
+  pthread_mutex_init(&this->fallen_state_mutex_,NULL);
   // [init services]
 
   // [init clients]
@@ -43,6 +47,7 @@ CeabotStairsAlgNode::~CeabotStairsAlgNode(void)
   pthread_mutex_destroy(&this->left_foot_data_mutex_);
   pthread_mutex_destroy(&this->imu_mutex_);
   pthread_mutex_destroy(&this->odom_mutex_);
+  pthread_mutex_destroy(&this->fallen_state_mutex_);
 }
 
 void CeabotStairsAlgNode::mainNodeThread(void)
@@ -59,6 +64,18 @@ void CeabotStairsAlgNode::mainNodeThread(void)
 }
 
 /*  [subscriber callbacks] */
+void CeabotStairsAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& msg) {
+  if (msg->data == 0 || msg->data == 1) this->fallen = true;
+}
+
+void CeabotStairsAlgNode::fallen_state_mutex_enter(void) {
+  pthread_mutex_lock(&this->fallen_state_mutex_);
+}
+
+void CeabotStairsAlgNode::fallen_state_mutex_exit(void) {
+  pthread_mutex_unlock(&this->fallen_state_mutex_);
+}
+
 void CeabotStairsAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg) {
   this->odom_x = msg->pose.pose.position.x;
   this->odom_y = msg->pose.pose.position.y;
@@ -250,9 +267,23 @@ void CeabotStairsAlgNode::state_machine(void) {
       complete_down_stair();
       break;
 
+    case START_WALKING_PHASE_4:
+      ROS_INFO("START WALKING PHASE 4 STATE");
+      start_walking_phase_4();
+      break;
+
+    case CHECK_WALKING_DIRECTION_PHASE_4:
+      ROS_INFO("CHECK WALKING DIRECTION PHASE 4 STATE");
+      check_walking_direction_phase_4();
+      break;
+
+    case STOP_WALKING_PHASE_4:
+      ROS_INFO("STOP WALKING PHASE 4 STATE");
+      stop_walking_phase_4();
+      break;
+
     case FINISH:
       ROS_INFO("FINISH STATE");
-      finish();
       break;
   }
 }
@@ -268,7 +299,7 @@ void CeabotStairsAlgNode::start_function(void) {
 void CeabotStairsAlgNode::wait_start_time(void) {
   if (this->timeout.timed_out()) {
     this->timeout.stop();
-    this->darwin_state = START_WALKING_PHASE_2;
+    this->darwin_state = START_WALKING_PHASE_1;
   }
 }
 
@@ -301,9 +332,10 @@ void CeabotStairsAlgNode::start_climbing_stair(void) {
 
 void CeabotStairsAlgNode::complete_climbing_stair(void) {
   if (this->stairs.is_finished()) {
-    ++this->stairs_counter;
+    if(!this->fallen) ++this->stairs_counter;
     if (this->stairs_counter < 3) this->darwin_state = START_WALKING_PHASE_1;
     else this->darwin_state = START_WALKING_PHASE_2;
+    this->fallen = false;
   }
 }
 
@@ -435,13 +467,36 @@ void CeabotStairsAlgNode::down_stair(void) {
 
 void CeabotStairsAlgNode::complete_down_stair(void) {
   if (this->stairs.is_finished()) {
-    ++this->stairs_counter;
+    if (!this->fallen) ++this->stairs_counter;
     if (this->stairs_counter < 6) this->darwin_state = START_WALKING_PHASE_3;
-    else this->darwin_state = FINISH;
+    else this->darwin_state = START_WALKING_PHASE_4;
+    this->fallen = false;
   }
 }
 
-void CeabotStairsAlgNode::finish(void){}
+void CeabotStairsAlgNode::start_walking_phase_4(void) {
+  this->initial_x_phase_4 = this->odom_x;
+  this->initial_y_phase_4 = this->odom_y;
+  this->walk.set_steps_size(0.01, 0.0, 0.0);
+  this->darwin_state = CHECK_WALKING_DIRECTION_PHASE_4;
+}
+
+void CeabotStairsAlgNode::check_walking_direction_phase_4(void) {
+  double angle_diff = this->straight_forward_direction - this->bno055_measurement;
+  this->walk.set_steps_size(0.01, 0.0, saturate_angle(angle_diff));
+
+  double distance = sqrt(pow(this->initial_x_phase_4 - this->odom_x,2) + pow(this->initial_y_phase_4 - this->odom_y,2));
+  if (distance >= 0.5 - ERROR_PHASE_2) {
+    this->darwin_state = START_WALKING_PHASE_4;
+  }
+}
+
+void CeabotStairsAlgNode::stop_walking_phase_4(void) {
+  if (this->walk.is_finished()) {
+    this->darwin_state = FINISH;
+  }
+  else this->walk.stop();
+}
 //------------------------------------------------------------------------------
 void CeabotStairsAlgNode::init_walk_module(void) {
   //ROS_INFO("Darwin Ceabot Vision : Walk Parameters Initialization");

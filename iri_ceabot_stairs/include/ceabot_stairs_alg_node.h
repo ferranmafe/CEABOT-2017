@@ -80,6 +80,9 @@
                FINISH_ANGLE_CORRECTION,
                DOWN_STAIR,
                COMPLETE_DOWN_STAIR,
+               START_WALKING_PHASE_4,
+               CHECK_WALKING_DIRECTION_PHASE_4,
+               STOP_WALKING_PHASE_4,
                FINISH
                } darwin_states;
 
@@ -113,6 +116,12 @@ class CeabotStairsAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotStairs
     void odom_mutex_enter(void);
     void odom_mutex_exit(void);
 
+    ros::Subscriber fallen_state_subscriber_;
+    void fallen_state_callback(const std_msgs::Int8::ConstPtr& msg);
+    pthread_mutex_t fallen_state_mutex_;
+    void fallen_state_mutex_enter(void);
+    void fallen_state_mutex_exit(void);
+
     // [service attributes]
 
     // [client attributes]
@@ -130,7 +139,7 @@ class CeabotStairsAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotStairs
     darwin_states darwin_state;
 
     bool first_bno_lecture;
-
+    bool fallen;
     int stairs_counter;
 
     double bno055_measurement;
@@ -141,6 +150,8 @@ class CeabotStairsAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotStairs
     double initial_y_phase_2;
     double initial_x_phase_3;
     double initial_y_phase_3;
+    double initial_x_phase_4;
+    double initial_y_phase_4;
     double initial_x_go_back;
     double initial_y_go_back;
     double initial_angle_to_correct;
@@ -252,6 +263,12 @@ class CeabotStairsAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotStairs
     void down_stair(void);
 
     void complete_down_stair(void);
+
+    void start_walking_phase_4(void);
+
+    void check_walking_direction_phase_4(void);
+
+    void stop_walking_phase_4(void);
 
     void finish(void);
 //------------------------------------------------------------------------------
