@@ -124,6 +124,10 @@
         <remap from="/darwin/iri_ceabot_stairs/right_foot_data"
                  to="/darwin/sensors/right_foot_data"/>
 
+        <!--Buttons remaps-->
+        <remap from="/darwin/iri_ceabot_stairs/buttons"
+                 to="/darwin/buttons"/>
+
   </node>
 
 </launch>

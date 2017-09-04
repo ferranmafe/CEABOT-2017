@@ -12,7 +12,8 @@ CeabotStairsAlgNode::CeabotStairsAlgNode(void) :
   this->first_bno_lecture = false;
   this->fallen = false;
   this->stairs_counter = 0;
-  this->darwin_state = START;
+  this->darwin_state = IDLE;
+  this->event_start = false;
 
   // [init publishers]
 
@@ -31,6 +32,10 @@ CeabotStairsAlgNode::CeabotStairsAlgNode(void) :
 
   this->fallen_state_subscriber_ = this->public_node_handle_.subscribe("fallen_state", 1, &CeabotStairsAlgNode::fallen_state_callback, this);
   pthread_mutex_init(&this->fallen_state_mutex_,NULL);
+
+  this->buttons_subscriber_ = this->public_node_handle_.subscribe("buttons", 1, &CeabotStairsAlgNode::buttons_callback, this);
+  pthread_mutex_init(&this->buttons_mutex_,NULL);
+
   // [init services]
 
   // [init clients]
@@ -59,11 +64,30 @@ void CeabotStairsAlgNode::mainNodeThread(void)
   // [fill action structure and make request to the action server]
 
   // [publish messages]
-
-  state_machine();
+  if (this->event_start) state_machine();
 }
 
 /*  [subscriber callbacks] */
+void CeabotStairsAlgNode::buttons_callback(const humanoid_common_msgs::buttons::ConstPtr& msg)
+{
+  for (int i = 0; i < msg->name.size(); ++i) {
+    if (msg->name[i] == "start" && msg->state[i] == true) {
+	    this->darwin_state = START;
+	    this->event_start = true;
+    }
+  }
+}
+
+void CeabotStairsAlgNode::buttons_mutex_enter(void)
+{
+  pthread_mutex_lock(&this->buttons_mutex_);
+}
+
+void CeabotStairsAlgNode::buttons_mutex_exit(void)
+{
+  pthread_mutex_unlock(&this->buttons_mutex_);
+}
+
 void CeabotStairsAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& msg) {
   if (msg->data == 0 || msg->data == 1) this->fallen = true;
 }

@@ -48,6 +48,7 @@
 #include <std_msgs/Int8.h>
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
+#include <humanoid_common_msgs/buttons.h>
 #include <tf/tf.h>
 // [service client headers]
 
@@ -122,6 +123,11 @@ class CeabotStairsAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotStairs
     void fallen_state_mutex_enter(void);
     void fallen_state_mutex_exit(void);
 
+    ros::Subscriber buttons_subscriber_;
+    void buttons_callback(const humanoid_common_msgs::buttons::ConstPtr& msg);
+    pthread_mutex_t buttons_mutex_;
+    void buttons_mutex_enter(void);
+    void buttons_mutex_exit(void);
     // [service attributes]
 
     // [client attributes]
@@ -140,6 +146,7 @@ class CeabotStairsAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotStairs
 
     bool first_bno_lecture;
     bool fallen;
+    bool event_start;
     int stairs_counter;
 
     double bno055_measurement;
