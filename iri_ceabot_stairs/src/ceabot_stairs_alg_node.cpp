@@ -319,13 +319,13 @@ void CeabotStairsAlgNode::start_function(void) {
   init_headt_module();
   this->darwin_state = WAIT_START_TIME;
   this->first_bno_lecture = true;
-  this->timeout.start(ros::Duration(1.0));
+  this->timeout.start(ros::Duration(5.0));
 }
 
 void CeabotStairsAlgNode::wait_start_time(void) {
   if (this->timeout.timed_out()) {
     this->timeout.stop();
-    this->darwin_state = START_WALKING_PHASE_2;
+    this->darwin_state = START_WALKING_PHASE_1;
   }
 }
 
@@ -447,7 +447,7 @@ void CeabotStairsAlgNode::check_go_back(void) {
 
   double distance = sqrt(pow(this->initial_x_go_back - this->odom_x,2) + pow(this->initial_y_go_back - this->odom_y,2));
   std::cout << "Distance to goal: " << distance << std::endl;
-  if (distance >= 0.07 - ERROR_GO_BACK) {
+  if (distance >= 0.1 - ERROR_GO_BACK) {
     this->darwin_state = CHECK_WALKING_DIRECTION_PHASE_3;
   }
 }
@@ -511,10 +511,10 @@ void CeabotStairsAlgNode::check_walking_direction_phase_4(void) {
   double angle_diff = this->straight_forward_direction - this->bno055_measurement;
   this->walk.set_steps_size(0.01, 0.0, saturate_angle(angle_diff));
 
-  double distance = sqrt(pow(this->initial_x_phase_4 - this->odom_x,2) + pow(this->initial_y_phase_4 - this->odom_y,2));
-  if (distance >= 0.5 - ERROR_PHASE_2) {
-    this->darwin_state = START_WALKING_PHASE_4;
-  }
+  //double distance = sqrt(pow(this->initial_x_phase_4 - this->odom_x,2) + pow(this->initial_y_phase_4 - this->odom_y,2));
+  //if (distance >= 0.5 - ERROR_PHASE_2) {
+    //this->darwin_state = START_WALKING_PHASE_4;
+  //}
 }
 
 void CeabotStairsAlgNode::stop_walking_phase_4(void) {
