@@ -103,7 +103,12 @@ void CeabotStairsAlgNode::fallen_state_mutex_exit(void) {
 void CeabotStairsAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg) {
   this->odom_x = msg->pose.pose.position.x;
   this->odom_y = msg->pose.pose.position.y;
+<<<<<<< HEAD
   std::cout << "holiiiiiiii" << std::endl;
+=======
+ // std::cout << "Leyendo odometria..." << std::endl;
+
+>>>>>>> a082049ac98007c6a497a51458f018aae73a40a0
 }
 
 void CeabotStairsAlgNode::odom_mutex_enter(void) {
@@ -324,7 +329,7 @@ void CeabotStairsAlgNode::start_function(void) {
 void CeabotStairsAlgNode::wait_start_time(void) {
   if (this->timeout.timed_out()) {
     this->timeout.stop();
-    this->darwin_state = START_WALKING_PHASE_1;
+    this->darwin_state = START_WALKING_PHASE_2;
   }
 }
 
@@ -338,7 +343,7 @@ void CeabotStairsAlgNode::check_walking_direction_phase_1(void) {
   double angle_diff = this->straight_forward_direction - this->bno055_measurement;
   this->walk.set_steps_size(this->config_.x_step, 0.0, saturate_angle(angle_diff));
 
-  if ((!this->left_foot["front_left"] || !this->left_foot["front_right"]) && (!this->right_foot["front_left"] || !this->right_foot["front_right"])) {
+  if (!this->left_foot["front_left"] && !this->left_foot["front_right"] && !this->right_foot["front_left"] && !this->right_foot["front_right"]) {
     this->darwin_state = STOP_WALKING_PHASE_1;
   }
 }
@@ -377,7 +382,7 @@ void CeabotStairsAlgNode::check_walking_direction_phase_2(void) {
 
   double distance = sqrt(pow(this->initial_x_phase_2 - this->odom_x,2) + pow(this->initial_y_phase_2 - this->odom_y,2));
   std::cout << "Distance to goal: " << distance << std::endl;
-  if (distance >= 0.4 - ERROR_PHASE_2) {
+  if (distance >= 0.25 - ERROR_PHASE_2) {
     this->darwin_state = START_WALKING_PHASE_3;
   }
 }
@@ -472,7 +477,7 @@ void CeabotStairsAlgNode::start_angle_correction(void) {
 void CeabotStairsAlgNode::check_angle_correction(void) {
   double angle_diff = this->initial_angle_to_correct - this->bno055_measurement;
   std::cout << "Angle turned: " << angle_diff << std::endl;
-  this->walk.set_steps_size(0.0, 0.0, this->turn_direction * 0.04);
+  this->walk.set_steps_size(-0.005, 0.0, this->turn_direction * 0.04);
   if (angle_diff >= 0.08 - ERROR_TURN || angle_diff <= -0.08 + ERROR_TURN) {
     this->darwin_state = FINISH_ANGLE_CORRECTION;
   }
