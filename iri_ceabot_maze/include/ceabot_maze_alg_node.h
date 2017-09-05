@@ -91,8 +91,10 @@
                CHECK_SOUTH,
                STOP_SPINNING_SOUTH,
                CHECK_STOP_SPINNING_SOUTH,
-               START_WAITING,
-               WAIT,
+               START_WAITING1,
+               WAIT1,
+               START_WAITING2,
+               WAIT2,
                WAIT_TRACKING,
                TURN_TO_SOUTH,
                TURN_TO_NORTH
@@ -181,6 +183,7 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     bool wall_qr_goal_found;
     bool first_bno_lecture;
     bool first_lecture;
+    bool get_wall_qr;
 
     double pan_angle;
     double goal_x;
@@ -206,7 +209,6 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     int    direction;
     int    way_zaxis_grow;
     int    way_xaxis_grow;
-    int times_timedout;
     double next_x_mov;
     double next_z_mov;
     double ini_x;
@@ -361,6 +363,8 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
       bool ddpoint_goet (DDPOINT a, DDPOINT b, bool n);
 
       bool wall_too_far (qr_info wall, qr_info obs);
+
+      bool NS_orientation (qr_info obs);
 
       std::pair<std::string, int> divide_qr_tag (std::string qr_tag);
 
