@@ -10,6 +10,8 @@
 
   <include file="$(find bno055_imu)/launch/darwin_bno055_imu.launch"/>
 
+  <include file="$(find darwin_odometry)/launch/darwin_odometry.launch"/>
+
    <!-- launch the ceabot stairs client node -->
    <node name="iri_ceabot_stairs"
          pkg="iri_ceabot_stairs"
@@ -117,6 +119,8 @@
         <!-- Odometry remaps -->
          <remap from="/darwin/iri_ceabot_stairs/odom"
                to="/darwin/robot/odom"/>
+	       <remap from="/darwin/iri_ceabot_stairs/joint_states"
+		           to="/darwin/joint_states"/>
 
         <!--Foot sensor remaps-->
         <remap from="/darwin/iri_ceabot_stairs/left_foot_data"
@@ -129,5 +133,8 @@
                  to="/darwin/buttons"/>
 
   </node>
+
+  <include file="$(find ir_foot_sensor)/launch/darwin_two_feet_nodelet.launch">
+  </include>
 
 </launch>
