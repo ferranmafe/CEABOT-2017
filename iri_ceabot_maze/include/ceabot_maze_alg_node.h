@@ -29,6 +29,7 @@
 #include "ceabot_maze_alg.h"
 
 #include <humanoid_modules/walk_module.h>
+#include <humanoid_common_msgs/buttons.h>
 #include <humanoid_modules/head_tracking_module.h>
 #include <humanoid_modules/action_module.h>
 #include <iri_ros_tools/timeout.h>
@@ -125,6 +126,12 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     // [publisher attributes]
 
     // [subscriber attributes]
+    ros::Subscriber buttons_subscriber_;
+    void buttons_callback(const humanoid_common_msgs::buttons::ConstPtr& msg);
+    pthread_mutex_t buttons_mutex_;
+    void buttons_mutex_enter(void);
+    void buttons_mutex_exit(void);
+    
     ros::Subscriber fallen_state_subscriber_;
     void fallen_state_callback(const std_msgs::Int8::ConstPtr& msg);
     pthread_mutex_t fallen_state_mutex_;

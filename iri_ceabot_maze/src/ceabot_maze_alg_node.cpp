@@ -34,6 +34,9 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   // [init publishers]
 
   // [init subscribers]
+  this->buttons_subscriber_ = this->public_node_handle_.subscribe("buttons", 1, &CeabotMazeAlgNode::buttons_callback, this);
+  pthread_mutex_init(&this->buttons_mutex_,NULL);
+
   this->fallen_state_subscriber_ = this->public_node_handle_.subscribe("fallen_state", 1, &CeabotMazeAlgNode::fallen_state_callback, this);
   pthread_mutex_init(&this->fallen_state_mutex_,NULL);
 
@@ -61,6 +64,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
 
 CeabotMazeAlgNode::~CeabotMazeAlgNode(void){
   // [free dynamic memory]
+  pthread_mutex_destroy(&this->buttons_mutex_);
   pthread_mutex_destroy(&this->fallen_state_mutex_);
   pthread_mutex_destroy(&this->imu_mutex_);
   pthread_mutex_destroy(&this->odom_mutex_);
@@ -89,7 +93,7 @@ void CeabotMazeAlgNode::mainNodeThread(void){
 
   // [publish messages]
 
-  if (!this->event_start) {
+  if (not this->event_start) {
     state_machine();
 
     if (this->half_maze_achieved) {this->way_zaxis_grow = 1.0; this->way_xaxis_grow = 1.0;}
@@ -105,20 +109,29 @@ void CeabotMazeAlgNode::mainNodeThread(void){
   //Then, waits for 5 sec (start condition - read CEABOT rules) and change the Darwin
   //state to start searching for the first QR code
   else {
-    //Initialization of Darwin parameters
-    init_walk_module();
-    init_headt_module();
-
     //5 sec sleep. It's for the init of the event, the rules says that Darwin must
     //wait this amount of time in seconds
     ros::Duration(5.0).sleep();
 
     //We must set down the start flag in terms of dont enter to this condition again
-    this->event_start = false;
+    //this->event_start = false;
   }
 }
 
 /*  [subscriber callbacks] */
+void CeabotMazeAlgNode::buttons_callback(const humanoid_common_msgs::buttons::ConstPtr& msg)
+{
+  for (int i = 0; i < msg->name.size(); ++i) {
+    if (msg->name[i] == "start" && msg->state[i] == true) {
+	this->darwin_state = IDLE;
+	init_walk_module();
+	init_headt_module();
+	this->event_start = true;
+    }
+  }
+  ROS_INFO("CeabotMazeAlgNode::buttons_callback: New Message Received");
+}
+
 void CeabotMazeAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& msg) {
   //ROS_INFO("CeabotMazeAlgNode::fallen_state_callback: New Message Received");
 
@@ -126,10 +139,10 @@ void CeabotMazeAlgNode::fallen_state_callback(const std_msgs::Int8::ConstPtr& ms
   //this->alg_.lock();
   //this->fallen_state_mutex_enter();
   this->fallen_state = msg->data;
-  /*if (msg->data == 0 or msg->data == 1) {
-    this->darwin_state = FALLEN_DARWIN; *///No creo que lo mejor sea saltar directamente, habria que guardarse el estado anterior o algo por el estilo... (idk)
-    //std::cout << "Fallen detectado con el fallen state callback" << std::endl;
-  //}
+  if (msg->data == 0 or msg->data == 1) {
+    this->darwin_state = FALLEN_DARWIN; //No creo que lo mejor sea saltar directamente, habria que guardarse el estado anterior o algo por el estilo... (idk)
+    std::cout << "Fallen detectado con el fallen state callback" << std::endl;
+  }
 
   //std::cout << msg->data << std::endl;
   //unlock previously blocked shared variables
@@ -536,7 +549,7 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
 
     case FALLEN_DARWIN:
       ROS_INFO("Checking Darwin integrity...");
-      /*if (!this->walk.is_finished()) this->walk.stop();
+      if (not this->walk.is_finished()) this->walk.stop();
       if (this->action.is_finished()) {
         if (this->fallen_state == 0) {
           this->action.execute(10);
@@ -547,25 +560,15 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
       }
 
       this->darwin_state = IS_DARWIN_STANDING;
-      */
+
       break;
 
     case IS_DARWIN_STANDING:
       ROS_INFO("Waiting for Darwin to be upwards...");
-      /*if (this->action.is_finished()) {
-        this->darwin_state = MOVEMENT_ALPHA;
-        if (!this->half_maze_achieved){
-          this->nm_alpha = this->north_of_the_maze - this->bno055_measurement;
-        }
-        else {
-          double south_of_the_maze = PI - this->north_of_the_maze;
-          if (south_of_the_maze < 0.0) south_of_the_maze += 2.0 * PI;
-          else if (south_of_the_maze >= 2.0 * PI) south_of_the_maze -= 2.0 * PI;
-
-          this->nm_alpha = south_of_the_maze - this->bno055_measurement;
-        }
-        this->nm_x = 0.0;
-      }*/
+      if (this->action.is_finished()) {
+        if (not this->half_maze_achieved and straight_to_north()) this->darwin_state = SCAN_MAZE;
+        else if (this->half_maze_achieved and straight_to_south()) this->darwin_state = SCAN_MAZE;
+      }
       break;
 
     case START_WAITING1 :
@@ -893,11 +896,11 @@ DDPOINT CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2)
 
         if (not is_wall(obs1) and not is_wall(obs2)) {
           if (NS_orientation(*obs1) and not NS_orientation(*obs2)) {
-            ret.x = (obs1->pos.x + obs2->pos.x + 0.1*way_xaxis_grow)/2.0;
+            ret.x = (obs1->pos.x + obs2->pos.x + 0.15*this->way_xaxis_grow)/2.0;
             ret.z = min_z;
           }
           else if (not NS_orientation(*obs1) and NS_orientation(*obs2)) {
-            ret.x = (obs1->pos.x + obs2->pos.x - 0.1*way_xaxis_grow)/2.0;
+            ret.x = (obs1->pos.x + obs2->pos.x - 0.15*this->way_xaxis_grow)/2.0;
             ret.z = min_z;
           }
           else {
@@ -908,7 +911,7 @@ DDPOINT CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2)
 
         else if (not is_wall(obs1) and is_wall(obs2)) {
           if (NS_orientation(*obs1)) {
-            ret.x = (obs1->pos.x + obs2->pos.x + 0.1*way_xaxis_grow)/2.0;
+            ret.x = (obs1->pos.x + obs2->pos.x + 0.15*this->way_xaxis_grow)/2.0;
             ret.z = min_z;
           }
           else {
@@ -919,7 +922,7 @@ DDPOINT CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2)
 
         else if (is_wall(obs1) and not is_wall(obs2)) {
           if (NS_orientation(*obs2)) {
-            ret.x = (obs1->pos.x + obs2->pos.x - 0.1*way_xaxis_grow)/2.0;
+            ret.x = (obs1->pos.x + obs2->pos.x - 0.15*this->way_xaxis_grow)/2.0;
             ret.z = min_z;
           }
           else {
@@ -936,16 +939,16 @@ DDPOINT CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2)
       }
       else if (obs1->qr_tag == "NULL" and obs2->qr_tag != "NULL") {
         if (not is_wall(obs2) and NS_orientation(*obs2)) {
-          ret.x = obs2->pos.x + 0.4*way_xaxis_grow;
+          ret.x = obs2->pos.x + 0.4*this->way_xaxis_grow;
         }
-        else ret.x = obs2->pos.x + 0.2*way_xaxis_grow;
+        else ret.x = obs2->pos.x + 0.15*this->way_xaxis_grow;
         ret.z = obs2->pos.z;
       }
       else if (obs1->qr_tag != "NULL" and obs2->qr_tag == "NULL") {
         if (not is_wall(obs1) and NS_orientation(*obs1)) {
-          ret.x = obs1->pos.x + 0.4*way_xaxis_grow;
+          ret.x = obs1->pos.x + 0.4*this->way_xaxis_grow;
         }
-        else ret.x = obs1->pos.x + 0.2*way_xaxis_grow;
+        else ret.x = obs1->pos.x + 0.15*this->way_xaxis_grow;
         ret.z = obs1->pos.z;
       }
     }
@@ -965,8 +968,9 @@ void CeabotMazeAlgNode::get_immediate_obs (int i, qr_info &obs1, qr_info &obs2) 
     obs1.qr_tag = "NULL";
   }
   else {
-    qr_info aux = qr_information [i - 1];
-    if (is_wall(&aux) and wall_too_far(aux, this->qr_information [i]) or (is_goal_wall(&this->qr_information [i]) and is_goal_wall(&aux))) {
+    qr_info aux = this->qr_information [i - 1];
+    double dis = distance_to_xy(this->qr_information [i].pos.x - aux.pos.x, this->qr_information [i].pos.z - aux.pos.z);
+    if (is_wall(&aux) and wall_too_far(aux, this->qr_information [i]) or (is_goal_wall(&this->qr_information [i]) and is_goal_wall(&aux)) or (is_goal_wall(&this->qr_information [i]) and dis > 1.5 + this->config_.ERROR_PERMES)) {
       obs1.qr_tag = "NULL";
     }
     else obs1 = aux;
@@ -975,8 +979,9 @@ void CeabotMazeAlgNode::get_immediate_obs (int i, qr_info &obs1, qr_info &obs2) 
     obs2.qr_tag = "NULL";
   }
   else {
-    qr_info aux = qr_information [i + 1];
-    if ((is_wall(&aux) and wall_too_far(aux, this->qr_information [i])) or (is_goal_wall(&this->qr_information [i]) and is_goal_wall(&aux))) {
+    qr_info aux = this->qr_information [i + 1];
+    double dis = distance_to_xy(this->qr_information [i].pos.x - aux.pos.x, this->qr_information [i].pos.z - aux.pos.z);
+    if ((is_wall(&aux) and wall_too_far(aux, this->qr_information [i])) or (is_goal_wall(&this->qr_information [i]) and is_goal_wall(&aux) or (is_goal_wall(&this->qr_information [i]) and dis > 1.5 + this->config_.ERROR_PERMES))) {
       obs2.qr_tag = "NULL";
     }
     else obs2 = aux;
@@ -1007,7 +1012,7 @@ bool CeabotMazeAlgNode::straight_to_north () {
   double diff = this->north_of_the_maze - this->bno055_measurement;
   switch (this->state_stn) {
     case CHECK_NORTH :
-      std::cout << "Checking north " << diff << std::endl;
+      //std::cout << "Checking north " << diff << std::endl;
       if (diff >= -ERROR and diff <= +ERROR) {
         ROS_INFO ("Now I'm straight to the North!");
         this->state_stn = STOP_SPINNING_NORTH;
@@ -1167,11 +1172,11 @@ void CeabotMazeAlgNode::calculate_movement_for_goal_qr () {
 
     if (not is_wall(&obs1) and not is_wall(&obs2)) {
       if (NS_orientation(obs1) and not NS_orientation(obs2)) {
-        this->next_x_mov = (obs1.pos.x + obs2.pos.x + 0.1*way_xaxis_grow)/2.0;
+        this->next_x_mov = (obs1.pos.x + obs2.pos.x + 0.15*this->way_xaxis_grow)/2.0;
         this->next_z_mov = min_z;
       }
       else if (not NS_orientation(obs1) and NS_orientation(obs2)) {
-        this->next_x_mov = (obs1.pos.x + obs2.pos.x - 0.1*way_xaxis_grow)/2.0;
+        this->next_x_mov = (obs1.pos.x + obs2.pos.x - 0.15*this->way_xaxis_grow)/2.0;
         this->next_z_mov = min_z;
       }
       else {
@@ -1182,7 +1187,7 @@ void CeabotMazeAlgNode::calculate_movement_for_goal_qr () {
 
     else if (not is_wall(&obs1) and is_wall(&obs2)) {
       if (NS_orientation(obs1)) {
-        this->next_x_mov = (obs1.pos.x + obs2.pos.x + 0.1*way_xaxis_grow)/2.0;
+        this->next_x_mov = (obs1.pos.x + obs2.pos.x + 0.15*this->way_xaxis_grow)/2.0;
         this->next_z_mov = min_z;
       }
       else {
@@ -1193,7 +1198,7 @@ void CeabotMazeAlgNode::calculate_movement_for_goal_qr () {
 
     else if (is_wall(&obs1) and not is_wall(&obs2)) {
       if (NS_orientation(obs2)) {
-        this->next_x_mov = (obs1.pos.x + obs2.pos.x - 0.1*way_xaxis_grow)/2.0;
+        this->next_x_mov = (obs1.pos.x + obs2.pos.x - 0.15*this->way_xaxis_grow)/2.0;
         this->next_z_mov = min_z;
       }
       else {
@@ -1207,31 +1212,31 @@ void CeabotMazeAlgNode::calculate_movement_for_goal_qr () {
       this->next_z_mov = min_z;
     }
 
-    this->str_forward_dis = fabs(this->goalqr_z - this->next_z_mov)*0.7;
+    this->str_forward_dis = fabs(this->goalqr_z - this->next_z_mov);
   }
   else if (obs1.qr_tag != "NULL" and obs2.qr_tag == "NULL") {
     if (not is_wall(&obs1) and NS_orientation(obs1)) {
-      this->next_x_mov = this->goalqr_x + 0.1*way_xaxis_grow;
+      this->next_x_mov = this->goalqr_x + 0.15*this->way_xaxis_grow;
     }
     else this->next_x_mov = this->goalqr_x;
     this->next_z_mov = obs1.pos.z;
 
-    this->str_forward_dis = fabs(this->goalqr_z - this->next_z_mov)*0.7;
+    this->str_forward_dis = fabs(this->goalqr_z - this->next_z_mov);
   }
   else if (obs1.qr_tag == "NULL" and obs2.qr_tag != "NULL") {
     if (not is_wall(&obs2) and NS_orientation(obs2)) {
-      this->next_x_mov = this->goalqr_x + 0.1*way_xaxis_grow;
+      this->next_x_mov = this->goalqr_x + 0.15*this->way_xaxis_grow;
     }
     else this->next_x_mov = this->goalqr_x;
     this->next_z_mov = obs2.pos.z;
 
-    this->str_forward_dis = fabs(this->goalqr_z - this->next_z_mov)*0.7;
+    this->str_forward_dis = fabs(this->goalqr_z - this->next_z_mov);
   }
   else {
 
 
-    this->str_forward_dis = fabs(this->goalqr_z)*0.5;
-    //this->darwin_state = STRAIGHT_FORWARD;
+    this->str_forward_dis = fabs(this->goalqr_z - this->odom_y);
+    this->darwin_state = STRAIGHT_FORWARD;
   }
 
   //this->next_x_mov = this->goalqr_x; this->next_z_mov = this->goalqr_z + 0.2*way_zaxis_grow;
@@ -1301,7 +1306,6 @@ void CeabotMazeAlgNode::check_alpha_goal_mfgqr () {
   std::cout << "mov_alpha_goal: " << this->mov_alpha_goal << std::endl;
   std::cout << "bno055: " << this->bno055_measurement << std::endl;
 
-
   double diff = fabs(this->mov_alpha_goal - this->bno055_measurement);
   std::cout << "diff: " << diff << std::endl;
   if (diff >= -this->config_.ERROR_PERMES and diff <= +this->config_.ERROR_PERMES) {
@@ -1333,14 +1337,7 @@ void CeabotMazeAlgNode::check_goal_mfgqr () {
     this->state_sts = CHECK_SOUTH;
     ROS_INFO("MFQR goal achieved...");
     this->walk.stop();
-    double dis_to_goalqr = distance_to_xy (this->goalqr_x - this->odom_x, this->goalqr_z - this->odom_y);
-    if (dis_to_goalqr <= 0.5 - this->config_.ERROR_PERMES and dis_to_goalqr >= 0.5 + this->config_.ERROR_PERMES) {
-      if (not this->half_maze_achieved) this->half_maze_achieved = true;
-      std::cout << "Half maze achieved: " << this->half_maze_achieved << ' ' << dis_to_goalqr << std::endl; //ALGO NO ESTA BIEN AQUI
-      this->darwin_state = IDLE;
-    }
-    else this->darwin_state = STRAIGHT_FORWARD;
-
+    this->darwin_state = STRAIGHT_FORWARD;
   }
   else {
     double tom = saturate_movement(this->config_.p * diff);
@@ -1349,10 +1346,9 @@ void CeabotMazeAlgNode::check_goal_mfgqr () {
 }
 
 void CeabotMazeAlgNode::straight_forward () {
-  double n_diff = this->north_of_the_maze - this->bno055_measurement;
-  double s_diff = this->south_of_the_maze - this->bno055_measurement;
-  if ((not this->half_maze_achieved and n_diff >= -this->config_.ERROR_PERMES and n_diff <= +this->config_.ERROR_PERMES) or (this->half_maze_achieved and s_diff >= -this->config_.ERROR_PERMES and s_diff <= +this->config_.ERROR_PERMES)) {
-    double goal = distance_to_xy(this->goalqr_x, this->goalqr_z);
+  std::cout << "hfmaze: " << this->half_maze_achieved << std::endl;
+  if ((not this->half_maze_achieved and straight_to_north()) or (this->half_maze_achieved and straight_to_south())) {
+    double goal = this->str_forward_dis;
     double sat = saturate_movement(goal);
     this->ini_x = this->odom_x;
     this->ini_z = this->odom_y;
@@ -1361,9 +1357,6 @@ void CeabotMazeAlgNode::straight_forward () {
 
     this->darwin_state = CHECK_STRAIGHT_FORWARD;
   }
-  else if (not this->half_maze_achieved) straight_to_north();
-  else if (this->half_maze_achieved) straight_to_south();
-
 
 }
 
@@ -1371,12 +1364,13 @@ void CeabotMazeAlgNode::check_straight_forward () {
   double distance_to_ini = distance_to_xy(this->ini_x - this->odom_x, this->ini_z - this->odom_y);
   double diff = fabs(this->str_forward_dis - distance_to_ini);
   std::cout << "Diferencia de distancia al QRRRRR: " << diff << std::endl;
-  if (diff >= -this->config_.ERROR_PERMES and diff <= +this->config_.ERROR_PERMES) {
+  if (diff >= -2*this->config_.ERROR_PERMES and diff <= +2*this->config_.ERROR_PERMES) {
     ROS_INFO("QR_GOAL or partial QR_GOAL achieved ...");
-    double distance_to_goal = distance_to_xy(this->goalqr_x - this->odom_x, this->goalqr_z - this->odom_y);
+    //double distance_to_goal = distance_to_xy(this->goalqr_x - (this->ini_x - this->odom_x), this->goalqr_z - (this->ini_z - this->odom_y));
+    //std::cout << "final distance to goal: " << distance_to_goal << std::endl;
     this->walk.stop();
     this->darwin_state = IDLE;
-    if (distance_to_goal >= 0.5 - this->config_.ERROR_PERMES and distance_to_goal <= 0.5 + this->config_.ERROR_PERMES) this->half_maze_achieved = true;
+    if (diff >= 0.2 - this->config_.ERROR_PERMES and diff <= 0.5 + this->config_.ERROR_PERMES) this->half_maze_achieved = true;
   }
   else {
     double tom = saturate_movement (diff);
