@@ -119,8 +119,8 @@
         <!-- Odometry remaps -->
          <remap from="/darwin/iri_ceabot_stairs/odom"
                to="/darwin/robot/odom"/>
-	 <remap from="/darwin/iri_ceabot_stairs/joint_states"
-		 to="/darwin/joint_states"/>
+	       <remap from="/darwin/iri_ceabot_stairs/joint_states"
+		           to="/darwin/joint_states"/>
 
         <!--Foot sensor remaps-->
         <remap from="/darwin/iri_ceabot_stairs/left_foot_data"
