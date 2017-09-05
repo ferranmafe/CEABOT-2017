@@ -9,7 +9,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   //this->loop_rate_ = 2;//in [Hz]
   this->event_start = true;
   this->time_to_wait = 5.0;
-  this->darwin_state = SCAN_MAZE;
+  this->darwin_state = IDLE;
   this->state_stn = CHECK_NORTH;
   this->state_sts = CHECK_SOUTH;
   this->first_bno_lecture = true;
@@ -126,7 +126,7 @@ void CeabotMazeAlgNode::buttons_callback(const humanoid_common_msgs::buttons::Co
 	this->darwin_state = IDLE;
 	init_walk_module();
 	init_headt_module();
-	this->event_start = true;
+	this->event_start = false;
     }
   }
   ROS_INFO("CeabotMazeAlgNode::buttons_callback: New Message Received");
