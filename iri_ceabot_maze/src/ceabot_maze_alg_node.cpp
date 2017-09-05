@@ -7,7 +7,7 @@ CeabotMazeAlgNode::CeabotMazeAlgNode(void) :
   action("action_client"){
   //init class attributes if necessary
   //this->loop_rate_ = 2;//in [Hz]
-  this->event_start = true;
+  this->event_start = false;
   this->time_to_wait = 5.0;
   this->darwin_state = SCAN_MAZE;
   this->state_stn = CHECK_NORTH;
@@ -111,10 +111,13 @@ void CeabotMazeAlgNode::mainNodeThread(void){
   else {
     //5 sec sleep. It's for the init of the event, the rules says that Darwin must
     //wait this amount of time in seconds
+    init_walk_module();
+    init_headt_module();
+
     ros::Duration(5.0).sleep();
 
     //We must set down the start flag in terms of dont enter to this condition again
-    //this->event_start = false;
+    this->event_start = false;
   }
 }
 
@@ -123,10 +126,8 @@ void CeabotMazeAlgNode::buttons_callback(const humanoid_common_msgs::buttons::Co
 {
   for (int i = 0; i < msg->name.size(); ++i) {
     if (msg->name[i] == "start" && msg->state[i] == true) {
-	this->darwin_state = IDLE;
-	init_walk_module();
-	init_headt_module();
-	this->event_start = true;
+  	this->darwin_state = SCAN_MAZE;
+  	this->event_start = true;
     }
   }
   ROS_INFO("CeabotMazeAlgNode::buttons_callback: New Message Received");
@@ -360,7 +361,7 @@ void CeabotMazeAlgNode::scan_maze(void) {
       this->current_angle_travelled = 0.0;
       this->tracking_module.start_tracking(goal_x, goal_y);
       this->search_started = true;
-      ROS_INFO ( "WOLOLOOOO");
+      ROS_INFO ("WOLOLOOOO");
     }
     else {
       this->tracking_module.update_target(goal_x, goal_y);
@@ -491,9 +492,11 @@ void CeabotMazeAlgNode::state_machine(void) { //Yo pondria fuera de la funcion l
   switch(this->darwin_state) {
     case IDLE:
       ROS_INFO("Darwin Ceabot Maze : state IDLE");
-      if (half_maze_achieved) {this->darwin_state = TURN_TO_SOUTH; this->state_sts = CHECK_SOUTH;}
-      else {this->darwin_state = TURN_TO_NORTH; this->state_stn = CHECK_NORTH;}
-      //this->darwin_state = SCAN_MAZE;
+    /*if (half_maze_achieved) {this->darwin_state = TURN_TO_SOUTH; this->state_sts = CHECK_SOUTH;}
+      else {this->darwin_state = TURN_TO_NORTH; this->state_stn = CHECK_NORTH;}*/
+      if (not this->half_maze_achieved and straight_to_north()) this->darwin_state = SCAN_MAZE;
+      else if (this->half_maze_achieved and straight_to_south()) this->darwin_state = SCAN_MAZE;
+
       break;
 
     case SCAN_MAZE:
@@ -963,14 +966,14 @@ DDPOINT CeabotMazeAlgNode::calculate_point_to_move(qr_info* obs1, qr_info* obs2)
 
 }
 
-void CeabotMazeAlgNode::get_immediate_obs (int i, qr_info &obs1, qr_info &obs2) {
+void CeabotMazeAlgNode::get_immediate_obs (int i, qr_info &obs1, qr_info &obs2) { //or (is_goal_wall(&this->qr_information [i]) and is_goal_wall(&aux)) or (is_goal_wall(&this->qr_information [i]) and is_goal_wall(&aux)
   if (i == 0) {
     obs1.qr_tag = "NULL";
   }
   else {
     qr_info aux = this->qr_information [i - 1];
     double dis = distance_to_xy(this->qr_information [i].pos.x - aux.pos.x, this->qr_information [i].pos.z - aux.pos.z);
-    if (is_wall(&aux) and wall_too_far(aux, this->qr_information [i]) or (is_goal_wall(&this->qr_information [i]) and is_goal_wall(&aux)) or (is_goal_wall(&this->qr_information [i]) and dis > 1.5 + this->config_.ERROR_PERMES)) {
+    if (is_wall(&aux) and wall_too_far(aux, this->qr_information [i]) or (is_goal_wall(&this->qr_information [i]) and dis > 1.5 + this->config_.ERROR_PERMES)) {
       obs1.qr_tag = "NULL";
     }
     else obs1 = aux;
@@ -981,7 +984,7 @@ void CeabotMazeAlgNode::get_immediate_obs (int i, qr_info &obs1, qr_info &obs2) 
   else {
     qr_info aux = this->qr_information [i + 1];
     double dis = distance_to_xy(this->qr_information [i].pos.x - aux.pos.x, this->qr_information [i].pos.z - aux.pos.z);
-    if ((is_wall(&aux) and wall_too_far(aux, this->qr_information [i])) or (is_goal_wall(&this->qr_information [i]) and is_goal_wall(&aux) or (is_goal_wall(&this->qr_information [i]) and dis > 1.5 + this->config_.ERROR_PERMES))) {
+    if ((is_wall(&aux) and wall_too_far(aux, this->qr_information [i])) or (is_goal_wall(&this->qr_information [i]) and dis > 1.5 + this->config_.ERROR_PERMES)) {
       obs2.qr_tag = "NULL";
     }
     else obs2 = aux;
@@ -1184,7 +1187,6 @@ void CeabotMazeAlgNode::calculate_movement_for_goal_qr () {
         this->next_z_mov = min_z; //Cas que recull tant el no son NS o el que son NS
       }
     }
-
     else if (not is_wall(&obs1) and is_wall(&obs2)) {
       if (NS_orientation(obs1)) {
         this->next_x_mov = (obs1.pos.x + obs2.pos.x + 0.15*this->way_xaxis_grow)/2.0;
@@ -1195,7 +1197,6 @@ void CeabotMazeAlgNode::calculate_movement_for_goal_qr () {
         this->next_z_mov = min_z;
       }
     }
-
     else if (is_wall(&obs1) and not is_wall(&obs2)) {
       if (NS_orientation(obs2)) {
         this->next_x_mov = (obs1.pos.x + obs2.pos.x - 0.15*this->way_xaxis_grow)/2.0;
@@ -1206,10 +1207,9 @@ void CeabotMazeAlgNode::calculate_movement_for_goal_qr () {
         this->next_z_mov = min_z;
       }
     }
-
     else if (is_wall(&obs1) and is_wall(&obs2)) {
-      this->next_x_mov = (obs1.pos.x + obs2.pos.x)/2.0;
-      this->next_z_mov = min_z;
+        this->next_x_mov = (obs1.pos.x + obs2.pos.x)/2.0;
+        this->next_z_mov = min_z;
     }
 
     this->str_forward_dis = fabs(this->goalqr_z - this->next_z_mov);
@@ -1233,12 +1233,31 @@ void CeabotMazeAlgNode::calculate_movement_for_goal_qr () {
     this->str_forward_dis = fabs(this->goalqr_z - this->next_z_mov);
   }
   else {
+    this->next_x_mov = this->goalqr_x;
+    this->next_z_mov = this->goalqr_z + 0.15*this->way_zaxis_grow;
 
-
-    this->str_forward_dis = fabs(this->goalqr_z - this->odom_y);
+    this->str_forward_dis = -1;
     this->darwin_state = STRAIGHT_FORWARD;
   }
 
+  if (is_goal_wall(&obs1) and is_goal_wall(&obs2)) {
+    this->next_x_mov = this->goalqr_x;
+    this->next_z_mov = this->goalqr_z + 0.4*this->way_zaxis_grow;
+    std::cout << "El punto de goal or goal es: " << this->next_x_mov << ' ' << this->next_z_mov << std::endl;
+    this->str_forward_dis = -1;
+  }
+  else if (is_goal_wall(&obs1) and not is_goal_wall(&obs2)) {
+    this->next_x_mov = (this->goalqr_x + obs1.pos.x)/2.0;
+    this->next_z_mov = obs2.pos.z;
+    this->str_forward_dis = fabs(this->goalqr_z - this->next_z_mov);
+  }
+  else if (not is_goal_wall(&obs1) and is_goal_wall(&obs2)) {
+    this->next_x_mov = (this->goalqr_x + obs2.pos.x)/2.0;
+    this->next_z_mov = obs1.pos.z;
+    this->str_forward_dis = fabs(this->goalqr_z - this->next_z_mov);
+  }
+
+  //if (is_goal_wall(&obs1) or is_goal_wall(&obs2)) this->darwin_state = STRAIGHT_FORWARD;
   //this->next_x_mov = this->goalqr_x; this->next_z_mov = this->goalqr_z + 0.2*way_zaxis_grow;
 
   this->nm_x = distance_to_xy(this->next_x_mov, this->next_z_mov);
@@ -1347,6 +1366,7 @@ void CeabotMazeAlgNode::check_goal_mfgqr () {
 
 void CeabotMazeAlgNode::straight_forward () {
   std::cout << "hfmaze: " << this->half_maze_achieved << std::endl;
+  if (this->str_forward_dis < 0) this->str_forward_dis = distance_to_xy(this->goalqr_x - this->odom_x, this->goalqr_z - this->odom_y);
   if ((not this->half_maze_achieved and straight_to_north()) or (this->half_maze_achieved and straight_to_south())) {
     double goal = this->str_forward_dis;
     double sat = saturate_movement(goal);
@@ -1364,13 +1384,14 @@ void CeabotMazeAlgNode::check_straight_forward () {
   double distance_to_ini = distance_to_xy(this->ini_x - this->odom_x, this->ini_z - this->odom_y);
   double diff = fabs(this->str_forward_dis - distance_to_ini);
   std::cout << "Diferencia de distancia al QRRRRR: " << diff << std::endl;
-  if (diff >= -2*this->config_.ERROR_PERMES and diff <= +2*this->config_.ERROR_PERMES) {
+  if (diff >= -this->config_.ERROR_PERMES and diff <= +this->config_.ERROR_PERMES) {
     ROS_INFO("QR_GOAL or partial QR_GOAL achieved ...");
     //double distance_to_goal = distance_to_xy(this->goalqr_x - (this->ini_x - this->odom_x), this->goalqr_z - (this->ini_z - this->odom_y));
-    //std::cout << "final distance to goal: " << distance_to_goal << std::endl;
+    std::cout << "final distance to goal: " << diff << std::endl;
+    std::cout << "nueva supuesta: " << distance_to_xy(this->goalqr_z, this->odom_y) << std::endl;
     this->walk.stop();
     this->darwin_state = IDLE;
-    if (diff >= 0.2 - this->config_.ERROR_PERMES and diff <= 0.5 + this->config_.ERROR_PERMES) this->half_maze_achieved = true;
+    if (diff >= 0.2 - this->config_.ERROR_PERMES and diff <= 0.4 + this->config_.ERROR_PERMES) this->half_maze_achieved = true;
   }
   else {
     double tom = saturate_movement (diff);
