@@ -103,8 +103,12 @@ void CeabotStairsAlgNode::fallen_state_mutex_exit(void) {
 void CeabotStairsAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg) {
   this->odom_x = msg->pose.pose.position.x;
   this->odom_y = msg->pose.pose.position.y;
+<<<<<<< HEAD
+  std::cout << "holiiiiiiii" << std::endl;
+=======
  // std::cout << "Leyendo odometria..." << std::endl;
 
+>>>>>>> a082049ac98007c6a497a51458f018aae73a40a0
 }
 
 void CeabotStairsAlgNode::odom_mutex_enter(void) {
