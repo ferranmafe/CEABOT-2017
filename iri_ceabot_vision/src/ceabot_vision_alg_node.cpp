@@ -89,7 +89,6 @@ void CeabotVisionAlgNode::buttons_callback(const humanoid_common_msgs::buttons::
 	this->event_start = true;
     }
   }
-  ROS_INFO("CeabotVisionAlgNode::buttons_callback: New Message Received");
 }
 
 void CeabotVisionAlgNode::buttons_mutex_enter(void)
@@ -309,15 +308,22 @@ void CeabotVisionAlgNode::state_machine(void) {
   switch(this->darwin_state) {
     //Case of no movement and no scanning
     case START:
-	ros::Duration(5.0).sleep();
-	this->darwin_state = IDLE;
+        this->timeout.start(ros::Duration(5.0));
+	      this->darwin_state = WAIT_START;
         break;
+
+    case WAIT_START:
+      if (this->timeout.timed_out()) {
+        this->timeout.stop();
+        this->darwin_state = IDLE;
+      }
+      break;
+
 
     case IDLE: //0 ------------------------------------------------------------------------------------------------------------------------------------
       ROS_INFO("Darwin Ceabot Vision : state IDLE");
-
-
       break;
+
     case SEARCH_QR: //1 -------------------------------------------------------------------------------------------------------------------------------
       if (!this->head_search_started) {
         ROS_INFO("HEY, I JUST STARTED SEARCHING!!");
