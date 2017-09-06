@@ -88,7 +88,7 @@ void CeabotMazeAlgNode::mainNodeThread(void){
 
 
 
-  // [fill action structure and make request to the action server]
+  // [fill action structure and make request to the action server]    init_walk_module();
 
   // [publish messages]
 
@@ -109,10 +109,6 @@ void CeabotMazeAlgNode::mainNodeThread(void){
   else {
     init_walk_module();
     init_headt_module();
-
-    ros::Duration(5.0).sleep();
-
-    this->event_start = false;
   }
 
   //Code for the start. It sets all the configuration from the .cfg to the modules.
@@ -128,6 +124,7 @@ void CeabotMazeAlgNode::buttons_callback(const humanoid_common_msgs::buttons::Co
     if (msg->name[i] == "start" && msg->state[i] == true) {
   	this->darwin_state = SCAN_MAZE;
   	this->event_start = false;
+    ros::Duration(5.0).sleep();
     }
   }
   //ROS_INFO("CeabotMazeAlgNode::buttons_callback: New Message Received");
