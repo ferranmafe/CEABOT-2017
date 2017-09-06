@@ -45,6 +45,8 @@
 #include <set>
 #include <math.h>
 #include <tf/tf.h>
+#include <iri_ros_tools/timeout.h>
+
 // [service client headers]
 
 // [action server client headers]
@@ -55,7 +57,8 @@
  */
 
  typedef enum {START,
-	       IDLE,
+               WAIT_START,
+	             IDLE,
                SEARCH_QR,
                WAIT_SEARCH,
                MOVEMENT,
@@ -118,7 +121,7 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
     * Is updated everytime function config_update() is called.
     */
 
-    
+
 
     //double concerning to the Yaw of Darwin
     double bno055_measurement;
@@ -189,6 +192,7 @@ class CeabotVisionAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotVision
 
     //Parameter to access to the data of the .cfg file
     Config config_;
+    CROSTimeout timeout;
   public:
    /**
     * \brief Constructor

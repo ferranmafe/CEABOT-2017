@@ -220,12 +220,12 @@ class CeabotMazeAlgNode : public algorithm_base::IriBaseAlgorithm<CeabotMazeAlgo
     double next_z_mov;
     double ini_x;
     double ini_z;
-    double time_to_wait;
     int    goalqr_vecpos;
     double goalqr_x;
     double goalqr_z;
     double str_forward_dis;
-    CROSTimeout timeout;
+    CROSTimeout timeout1;
+    CROSTimeout timeout2;
     tf::TransformListener listener;
 
     std::map<std::string, std::vector<qr_info> > qr_info_pre_processing;

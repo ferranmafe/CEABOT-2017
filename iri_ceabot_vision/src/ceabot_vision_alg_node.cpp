@@ -7,7 +7,8 @@ CeabotVisionAlgNode::CeabotVisionAlgNode(void) :
 {
   //init class attributes if necessary
   //Initialization of Darwin Vision Event parameters
-  this->event_start = false;
+  this->event_start = true;
+  this->darwin_state = START;
   this->movement_started = false;
 
   this->search_started=false;
@@ -88,7 +89,6 @@ void CeabotVisionAlgNode::buttons_callback(const humanoid_common_msgs::buttons::
 	this->event_start = true;
     }
   }
-  ROS_INFO("CeabotVisionAlgNode::buttons_callback: New Message Received");
 }
 
 void CeabotVisionAlgNode::buttons_mutex_enter(void)
@@ -191,8 +191,9 @@ void CeabotVisionAlgNode::joint_states_mutex_exit(void) {
 
 void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
-  if (this->darwin_state == IDLE and this->event_start and this->QR_identifier == "None") {
+  if (this->darwin_state == IDLE and this->event_start) {
       //From the QR Code that we are seeing, we discard the ones which we've seen before.
+      std::cout << "ENTERED QR POSE CALLBACK" << std::endl;
       std::cout << "-------------------------------" << std::endl;
       std::vector<qr_info> vec_aux;
       for (int i = 0; i < msg->tags.size(); ++i) {
@@ -307,16 +308,22 @@ void CeabotVisionAlgNode::state_machine(void) {
   switch(this->darwin_state) {
     //Case of no movement and no scanning
     case START:
-	ros::Duration(5.0).sleep();
-	this->darwin_state = IDLE;
+        this->timeout.start(ros::Duration(5.0));
+	      this->darwin_state = WAIT_START;
         break;
+
+    case WAIT_START:
+      if (this->timeout.timed_out()) {
+        this->timeout.stop();
+        this->darwin_state = IDLE;
+      }
+      break;
+
 
     case IDLE: //0 ------------------------------------------------------------------------------------------------------------------------------------
       ROS_INFO("Darwin Ceabot Vision : state IDLE");
-      //if (this->movement_started) {ros::duration.sleep(0.1); this->movement_started = false;} //We wait to get the correct QR...
-      //this->darwin_state = MOVEMENT;
-
       break;
+
     case SEARCH_QR: //1 -------------------------------------------------------------------------------------------------------------------------------
       if (!this->head_search_started) {
         ROS_INFO("HEY, I JUST STARTED SEARCHING!!");
@@ -334,10 +341,9 @@ void CeabotVisionAlgNode::state_machine(void) {
                 ROS_INFO("GOAL ACHIEVED");
                 ++this->head_state;
                 if (head_state <= 4) {
-		    update_pan_and_tilt();
-		    this->darwin_state = IDLE;
+		                update_pan_and_tilt();
                 }
-                else this->darwin_state = END;
+		            this->darwin_state = IDLE;
             }
         }
         break;
@@ -508,14 +514,14 @@ qr_info CeabotVisionAlgNode::choose_the_correct_qr(void) {
   double goal_calculated_old_qr = this->old_goal_bno + this->old_turn_angle + this->pan_angle;
   normalize_angle(goal_calculated_old_qr);
 
-  double goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(qr_to_process[0].x, qr_to_process[0].z) - this->pan_angle;
+  double goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(qr_to_process[0].x, qr_to_process[0].z) + this->pan_angle;
   normalize_angle(goal_calculated_new_qr);
 
   double qr_difference_respect_goal = goal_calculated_new_qr - goal_calculated_old_qr;
   obtain_absolute_value(qr_difference_respect_goal);
 
   for (int i = 1; i < qr_to_process.size(); ++i) {
-    goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(qr_to_process[i].x, qr_to_process[i].z) - this->pan_angle;
+    goal_calculated_new_qr = this->bno055_measurement + obtain_angle_against_darwins_head(qr_to_process[i].x, qr_to_process[i].z) + this->pan_angle;
 
     normalize_angle(goal_calculated_new_qr);
 
@@ -580,7 +586,9 @@ void CeabotVisionAlgNode::add_pan_angle_to_qr_id(void) {
     angle_to_turn += (aux_string[i] - '0') * pow(10, units);
     ++units;
   }
-  angle_to_turn += rad_to_deg(this->pan_angle);
+
+  if (this->head_state == 5) angle_to_turn -= 30;
+  else if (this->head_state == 4) angle_to_turn +=30;
 
   while (angle_to_turn > 0) {
     inverse_temp.push_back(angle_to_turn % 10 + '0');
