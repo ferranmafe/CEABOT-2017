@@ -1,22 +1,19 @@
 <launch>
 
   <arg name="robot" default="darwin" />
-  <arg name="environment" default="obstacles_env" />
 
-  <!-- include Darwin -->
-  <include file="$(find darwin_description)/launch/darwin_sim.launch">
+  <include file="$(find darwin_description)/launch/darwin_base.launch">
     <arg name="robot" value="$(arg robot)" />
   </include>
 
-  <!-- include the environment from the vision event -->
-  <include file="$(find bioloid_description)/launch/obstacles_env.launch">
-    <arg name="environment" value="$(arg environment)" />
-  </include>
+  <include file="$(find darwin_apps)/launch/xs_camera_qr.launch"/>
 
-  <!-- launch the ceabot vision client node -->
-  <node name="iri_ceabot_maze"
-        pkg="iri_ceabot_maze"
-        type="iri_ceabot_maze"
+  <include file="$(find bno055_imu)/launch/darwin_bno055_imu.launch"/>
+
+<!-- launch the ceabot vision client node -->
+  <node name="iri_ceabot_vision"
+        pkg="iri_ceabot_vision"
+        type="iri_ceabot_vision"
         output="screen"
         ns="/darwin">
         <param name="Y_SWAP_AMPLITUDE"    value="0.020"/>
@@ -39,72 +36,62 @@
         <param name="darwin_st"           value="0"/>
 
         <!--Walk remaps-->
-        <remap from="/darwin/iri_ceabot_maze/ceabot_maze_walk/cmd_vel"
+        <remap from="/darwin/iri_ceabot_vision/ceabot_vision_walk/cmd_vel"
                  to="/darwin/robot/cmd_vel"/>
-        <remap from="/darwin/iri_ceabot_maze/ceabot_maze_walk/set_walk_params"
+        <remap from="/darwin/iri_ceabot_vision/ceabot_vision_walk/set_walk_params"
                  to="/darwin/robot/set_walk_params"/>
-        <remap from="/darwin/iri_ceabot_maze/ceabot_maze_walk/get_walk_params"
+        <remap from="/darwin/iri_ceabot_vision/ceabot_vision_walk/get_walk_params"
                  to="/darwin/robot/get_walk_params"/>
-        <remap from="/darwin/iri_ceabot_maze/ceabot_maze_walk/set_servo_modules"
+        <remap from="/darwin/iri_ceabot_vision/ceabot_vision_walk/set_servo_modules"
                  to="/darwin/robot/set_servo_modules"/>
-        <remap from="/darwin/iri_ceabot_maze/ceabot_maze_walk/joint_states"
+        <remap from="/darwin/iri_ceabot_vision/ceabot_vision_walk/joint_states"
                  to="/darwin/joint_states"/>
-        <remap from="/darwin/iri_ceabot_maze/fallen_state"
+        <remap from="/darwin/iri_ceabot_vision/ceabot_vision_walk/fallen_state"
                  to="/darwin/robot/fallen_state"/>
 
-
        <!--Head Tracking remaps-->
-       <remap from="/darwin/iri_ceabot_maze/ceabot_maze_track/head_tracking_action"
+       <remap from="/darwin/iri_ceabot_vision/ceabot_vision_track/head_tracking_action"
                 to="/darwin/robot/head_follow_target"/>
-       <remap from="/darwin/iri_ceabot_maze/ceabot_maze_track/head_target"
+       <remap from="/darwin/iri_ceabot_vision/ceabot_vision_track/head_target"
                 to="/darwin/robot/head_target"/>
-       <remap from="/darwin/iri_ceabot_maze/ceabot_maze_track/set_pan_pid"
+       <remap from="/darwin/iri_ceabot_vision/ceabot_vision_track/set_pan_pid"
                 to="/darwin/robot/set_pan_pid"/>
-       <remap from="/darwin/iri_ceabot_maze/ceabot_maze_track/set_servo_modules"
+       <remap from="/darwin/iri_ceabot_vision/ceabot_vision_track/set_servo_modules"
                 to="/darwin/robot/set_servo_modules"/>
-       <remap from="/darwin/iri_ceabot_maze/ceabot_maze_track/get_pan_pid"
+       <remap from="/darwin/iri_ceabot_vision/ceabot_vision_track/get_pan_pid"
                 to="/darwin/robot/get_pan_pid"/>
-       <remap from="/darwin/iri_ceabot_maze/ceabot_maze_track/set_tilt_pid"
+       <remap from="/darwin/iri_ceabot_vision/ceabot_vision_track/set_tilt_pid"
                 to="/darwin/robot/set_tilt_pid"/>
-       <remap from="/darwin/iri_ceabot_maze/ceabot_maze_track/get_tilt_pid"
+       <remap from="/darwin/iri_ceabot_vision/ceabot_vision_track/get_tilt_pid"
                 to="/darwin/robot/get_tilt_pid"/>
-       <remap from="/darwin/iri_ceabot_maze/joint_states"
+       <remap from="/darwin/iri_ceabot_vision/joint_states"
                 to="/darwin/joint_states"/>
 
-       <!-- Action remaps-->
-       <remap from="/darwin/iri_ceabot_maze/action_client/motion_action"
-                to="/darwin/robot/motion_action"/>
-       <remap from="/darwin/iri_ceabot_maze/action_client/set_servo_modules"
-                to="/darwin/robot/set_servo_modules"/>
-
        <!-- bno055 remaps -->
-       <remap from="/darwin/iri_ceabot_maze/imu"
+       <remap from="/darwin/iri_ceabot_vision/imu"
               to="/darwin/sensors/raw_imu"/>
-
        <!-- Odometry remaps -->
-        <remap from="/darwin/iri_ceabot_maze/odom"
-               to="/darwin/robot/odom"/>
-       <!-- Qr detector service remaps -->
-       <remap from="/darwin/iri_ceabot_maze/set_qr_size"
-              to="/darwin/qr_detector/set_qr_size"/>
+        <remap from="/darwin/iri_ceabot_vision/odom"
+              to="/darwin/robot/odom"/>
 
-  </node>
-
-  <!-- launch the qr detector node -->
-  <node pkg="qr_detector"
-        name="qr_detector"
-        type="qr_detector"
-        output="screen"
-        ns="/darwin">
-        <param name="qr_x" value="0.084"/>
-        <param name="qr_y" value="0.084"/>
-        <param name="camera_frame" value="/darwin/camera_link"/>
-        <remap from="/darwin/qr_detector/camera/image_raw"
+	<remap from="/darwin/qr_detector/camera/image_raw"
                  to="/darwin/camera/image_raw"/>
         <remap from="/darwin/qr_detector/camera/camera_info"
                  to="/darwin/camera/camera_info"/>
         <remap from="/darwin/qr_detector/qr_pose"
-                 to="/darwin/iri_ceabot_maze/qr_pose"/>
+                 to="/darwin/iri_ceabot_vision/qr_pose"/>
+		
+
+  </node>
+
+  <!-- launch the darwin_buttons to simulate the polling -->
+  <node pkg="darwin_buttons"
+        name="darwin_buttons"
+        type="darwin_buttons"
+        output="screen"
+        ns="/darwin">
+        <remap from="/darwin/darwin_buttons/parameter_updates"
+                 to="/darwin/iri_ceabot_vision/buttons"/>
   </node>
 
   <!-- launch the Darwins Camera node -->
@@ -119,3 +106,4 @@
     output="screen"/>
 
 </launch>
+
