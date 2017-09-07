@@ -106,10 +106,6 @@ void CeabotMazeAlgNode::mainNodeThread(void){
     std::cout << "way_xaxis_grow : " << this->way_xaxis_grow << std::endl;
     std::cout << "way_zaxis_grow : " << this->way_zaxis_grow << std::endl;*/
   }
-  else {
-    init_walk_module();
-    init_headt_module();
-  }
 
   //Code for the start. It sets all the configuration from the .cfg to the modules.
   //Then, waits for 5 sec (start condition - read CEABOT rules) and change the Darwin
@@ -124,7 +120,9 @@ void CeabotMazeAlgNode::buttons_callback(const humanoid_common_msgs::buttons::Co
     if (msg->name[i] == "start" && msg->state[i] == true) {
   	this->darwin_state = SCAN_MAZE;
   	this->event_start = false;
-    ros::Duration(5.0).sleep();
+        init_walk_module();
+        init_headt_module();
+//        ros::Duration(5.0).sleep();
     }
   }
   //ROS_INFO("CeabotMazeAlgNode::buttons_callback: New Message Received");
@@ -247,7 +245,7 @@ void CeabotMazeAlgNode::joint_states_mutex_exit(void) {
 void CeabotMazeAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_array::ConstPtr& msg) {
   this->qr_pose_mutex_enter();
 
-  //std::cout << this->times_timedout << " timedout.." << std::endl;
+  std::cout << "ENTERED QR POSE CALLBACK!!" << std::endl;
   if (msg->tags.size()>0) {
     if (this->searching_for_qr) {
       std::cout << "FIRST LECTURE: " << this->first_lecture << std::endl;

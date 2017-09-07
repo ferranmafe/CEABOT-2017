@@ -7,7 +7,7 @@ CeabotVisionAlgNode::CeabotVisionAlgNode(void) :
 {
   //init class attributes if necessary
   //Initialization of Darwin Vision Event parameters
-  this->event_start = true;
+  this->event_start = false;
   this->darwin_state = START;
   this->movement_started = false;
 
