@@ -222,7 +222,7 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
 
           this->old_goal_bno = aux_old_goal_bno;
           if (this->head_search_started) {
-	    std::cout << "Entered if in qr pose callback" << std::endl;
+	          std::cout << "Entered if in qr pose callback" << std::endl;
             this->head_state = 0;
             update_pan_and_tilt();
             this->tracking_module.update_target(this->pan_angle, this->tilt_angle);
@@ -230,7 +230,7 @@ void CeabotVisionAlgNode::qr_pose_callback(const humanoid_common_msgs::tag_pose_
             this->head_search_started = false;
           }
           else {
-	    std::cout << "Entered else in qr pose callback" << std::endl;
+	          std::cout << "Entered else in qr pose callback" << std::endl;
             this->darwin_state = MOVEMENT;
           }
       }
