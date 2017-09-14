@@ -36,7 +36,7 @@
          <param name="MAX_VEL"             value="0.1"/>
          <param name="MAX_ROT_VEL"         value="0.2"/>
          <param name="darwin_st"           value="0"/>
-
+	 <param name="camera_frame" value="/darwin/darwin_cam_link"/>
          <!--Walk remaps-->
          <remap from="/darwin/iri_ceabot_maze/ceabot_maze_walk/cmd_vel"
                   to="/darwin/robot/cmd_vel"/>

@@ -103,12 +103,6 @@ void CeabotStairsAlgNode::fallen_state_mutex_exit(void) {
 void CeabotStairsAlgNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg) {
   this->odom_x = msg->pose.pose.position.x;
   this->odom_y = msg->pose.pose.position.y;
-<<<<<<< HEAD
-  std::cout << "holiiiiiiii" << std::endl;
-=======
- // std::cout << "Leyendo odometria..." << std::endl;
-
->>>>>>> a082049ac98007c6a497a51458f018aae73a40a0
 }
 
 void CeabotStairsAlgNode::odom_mutex_enter(void) {
@@ -345,6 +339,7 @@ void CeabotStairsAlgNode::check_walking_direction_phase_1(void) {
 
   if (!this->left_foot["front_left"] && !this->left_foot["front_right"] && !this->right_foot["front_left"] && !this->right_foot["front_right"]) {
     this->darwin_state = STOP_WALKING_PHASE_1;
+    this->walk.stop();
   }
 }
 
@@ -352,7 +347,7 @@ void CeabotStairsAlgNode::stop_walking_phase_1(void) {
   if (this->walk.is_finished()) {
     this->darwin_state = START_CLIMBING_STAIR;
   }
-  else this->walk.stop();
+  //else this->walk.stop();
 }
 
 void CeabotStairsAlgNode::start_climbing_stair(void) {
@@ -362,7 +357,7 @@ void CeabotStairsAlgNode::start_climbing_stair(void) {
 
 void CeabotStairsAlgNode::complete_climbing_stair(void) {
   if (this->stairs.is_finished()) {
-    if(!this->fallen) ++this->stairs_counter;
+    ++this->stairs_counter;
     if (this->stairs_counter < 3) this->darwin_state = START_WALKING_PHASE_1;
     else this->darwin_state = START_WALKING_PHASE_2;
     this->fallen = false;
@@ -382,7 +377,7 @@ void CeabotStairsAlgNode::check_walking_direction_phase_2(void) {
 
   double distance = sqrt(pow(this->initial_x_phase_2 - this->odom_x,2) + pow(this->initial_y_phase_2 - this->odom_y,2));
   std::cout << "Distance to goal: " << distance << std::endl;
-  if (distance >= 0.25 - ERROR_PHASE_2) {
+  if (distance >= 0.35 - ERROR_PHASE_2) {
     this->darwin_state = START_WALKING_PHASE_3;
   }
 }
@@ -423,16 +418,16 @@ void CeabotStairsAlgNode::stop_walking_phase_3(void) {
 }
 
 void CeabotStairsAlgNode::check_position_for_down_stair(void) {
-    if (this->left_foot["down_left_middle"] || this->left_foot["down_right_middle"] || this->right_foot["down_left_middle"] || this->right_foot["down_right_middle"]) {
+   /* if (this->left_foot["down_left_middle"] || this->left_foot["down_right_middle"] || this->right_foot["down_left_middle"] || this->right_foot["down_right_middle"]) {
       this->darwin_state = START_GO_BACK;
-    }
-    else if (!this->left_foot["down_left_front"] && !this->left_foot["down_right_front"] && !this->right_foot["down_left_front"] && !this->right_foot["down_right_front"]) {
+    }*/
+    if (!this->left_foot["down_left_front"] && !this->left_foot["down_right_front"] && !this->right_foot["down_left_front"] && !this->right_foot["down_right_front"]) {
       this->darwin_state = START_WALKING_PHASE_3;
     }
-    else if (!this->left_foot["down_left_front"] || !this->left_foot["down_right_front"] || !this->right_foot["down_left_front"] || !this->right_foot["down_right_front"]) {
-      this->darwin_state = START_ANGLE_CORRECTION;
+    else if (this->left_foot["down_left_front"] && this->left_foot["down_right_front"] && this->right_foot["down_left_front"] && this->right_foot["down_right_front"]) {
+      this->darwin_state = DOWN_STAIR;
     }
-    else this->darwin_state = DOWN_STAIR;
+    else this->darwin_state = START_ANGLE_CORRECTION;
 }
 
 void CeabotStairsAlgNode::start_go_back(void) {
@@ -466,10 +461,10 @@ void CeabotStairsAlgNode::finish_go_back(void) {
 void CeabotStairsAlgNode::start_angle_correction(void) {
   this->initial_angle_to_correct = this->bno055_measurement;
   if (this->left_foot["down_left_front"] &&  !this->right_foot["down_right_front"]) {
-    this->turn_direction = 1.0;
+    this->turn_direction = -1.0;
   }
   else {
-    this->turn_direction = +1.0;
+    this->turn_direction = 1.0;
   }
   this->darwin_state = CHECK_ANGLE_CORRECTION;
 }
@@ -477,10 +472,11 @@ void CeabotStairsAlgNode::start_angle_correction(void) {
 void CeabotStairsAlgNode::check_angle_correction(void) {
   double angle_diff = this->initial_angle_to_correct - this->bno055_measurement;
   std::cout << "Angle turned: " << angle_diff << std::endl;
-  this->walk.set_steps_size(-0.005, 0.0, this->turn_direction * 0.04);
-  if (angle_diff >= 0.08 - ERROR_TURN || angle_diff <= -0.08 + ERROR_TURN) {
+  this->walk.set_steps_size(-0.01, 0.0, this->turn_direction * 0.04);
+  if (angle_diff >= 0.15 - ERROR_TURN || angle_diff <= -0.15 + ERROR_TURN) {
     this->darwin_state = FINISH_ANGLE_CORRECTION;
   }
+  else this->darwin_state = CHECK_POSITION_FOR_DOWN_STAIR;
 }
 
 void CeabotStairsAlgNode::finish_angle_correction(void) {
@@ -491,13 +487,16 @@ void CeabotStairsAlgNode::finish_angle_correction(void) {
 }
 
 void CeabotStairsAlgNode::down_stair(void) {
-  this->stairs.start(false);
-  this->darwin_state = COMPLETE_DOWN_STAIR;
+  if (this->walk.is_finished()) {
+   this->stairs.start(false);
+   this->darwin_state = COMPLETE_DOWN_STAIR;
+  }
+  else this->walk.stop();
 }
 
 void CeabotStairsAlgNode::complete_down_stair(void) {
   if (this->stairs.is_finished()) {
-    if (!this->fallen) ++this->stairs_counter;
+    ++this->stairs_counter;
     if (this->stairs_counter < 6) this->darwin_state = START_WALKING_PHASE_3;
     else this->darwin_state = START_WALKING_PHASE_4;
     this->fallen = false;

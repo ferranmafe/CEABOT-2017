@@ -109,9 +109,10 @@ void CeabotVisionAlgNode::imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
   //this->alg_.lock();
   //this->imu_mutex_enter();
   double bnoaux = tf::getYaw(msg->orientation);
+  
   if (bnoaux < 0) bnoaux += 2*PI;
   this->bno055_measurement = bnoaux; //We normalize the measurement...
-  if (!this->bno_readed_first_time) {
+  if (not this->bno_readed_first_time and this->darwin_state == WAIT_START) {
     this->old_goal_bno = bnoaux;
     this->bno_readed_first_time = true;
   }
